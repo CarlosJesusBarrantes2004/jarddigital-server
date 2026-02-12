@@ -21,18 +21,31 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+# IMPORTACIONES NUEVAS PARA LA DOCUMENTACIÓN
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView
+)
+
+from django.contrib import admin
+from django.urls import path, include  # <--- Asegúrate de importar 'include'
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
-    # 1. Panel de Administración (El clásico)
     path("admin/", admin.site.urls),
 
-    # 2. LOGIN (Aquí es donde Postman pedirá el token)
+    # Documentación (NO BORRAR)
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+
+    # Autenticación
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
-    # 3. TUS NUEVAS APPS (Futuro)
-    # Como ahora tienes apps separadas, en el futuro las agregaremos así:
-    # path('api/users/', include('apps.users.urls')),
-    # path('api/sales/', include('apps.sales.urls')),
-    # ... por ahora las dejo comentadas para que no te den error si no has creado los archivos urls.py dentro de cada carpeta.
+    # --- TUS APPS ---
+    # Aquí conectamos la app de usuarios
+    path('api/users/', include('apps.users.urls')),
+    # Aquí conectamos para obtener las ventas
+    path('api/sales/', include('apps.sales.urls')),
 ]

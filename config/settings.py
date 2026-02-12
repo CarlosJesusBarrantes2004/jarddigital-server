@@ -31,6 +31,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    "drf_spectacular",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -139,7 +140,20 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "users.Usuario"
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    )
+    # ... otras configuraciones de autenticación que ya tengas ...
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    # ESTA ES LA LÍNEA PARA LAS APIS:
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# Configuración visual de la documentación
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'JardDigital API',
+    'DESCRIPTION': 'Documentación de la API para el sistema de ventas y liquidaciones',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    # Esto agrega el botón de "Authorize" para pegar el Token
+    'COMPONENT_SPLIT_REQUEST': True
 }
