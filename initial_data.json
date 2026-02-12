@@ -1,0 +1,203 @@
+[
+{
+  "model": "users.rolsistema",
+  "pk": 1,
+  "fields": {
+    "codigo": "DUENO",
+    "nombre": "Dueño",
+    "nivel_jerarquia": 1,
+    "activo": true
+  }
+},
+{
+  "model": "users.rolsistema",
+  "pk": 2,
+  "fields": {
+    "codigo": "SUPERVISOR",
+    "nombre": "Supervisor",
+    "nivel_jerarquia": 2,
+    "activo": true
+  }
+},
+{
+  "model": "users.rolsistema",
+  "pk": 3,
+  "fields": {
+    "codigo": "ASESOR",
+    "nombre": "Asesor",
+    "nivel_jerarquia": 3,
+    "activo": true
+  }
+},
+{
+  "model": "users.rolsistema",
+  "pk": 4,
+  "fields": {
+    "codigo": "BACKOFFICE",
+    "nombre": "BackOffice",
+    "nivel_jerarquia": 3,
+    "activo": true
+  }
+},
+{
+  "model": "users.usuario",
+  "pk": 1,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$lZomgz8jhRFKdd6pxOtkSa$n0Dmlaz0gVDCrKezaKV7vSOlVP9OCa6ib884tJOIC1M=",
+    "last_login": null,
+    "is_superuser": true,
+    "username": "admin",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-02-12T18:26:56.200Z",
+    "nombre_completo": "",
+    "id_rol": null,
+    "activo": true,
+    "creado_en": "2026-02-12T18:26:56.736Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "users.usuario",
+  "pk": 2,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$wffRxIWQwXIk1m54UAnIBD$OHsgXWHtyaRcLRMx7ernzjxZmYE8bNUeTZADykPDG7M=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "vendedor01",
+    "first_name": "",
+    "last_name": "",
+    "email": "carlos@jarddigital.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-02-12T19:12:10.203Z",
+    "nombre_completo": "Carlos Vives",
+    "id_rol": 2,
+    "activo": true,
+    "creado_en": "2026-02-12T19:12:10.771Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "location.sucursal",
+  "pk": 1,
+  "fields": {
+    "nombre": "Sede Principal Chiclayo",
+    "direccion": "Dirección Genérica"
+  }
+},
+{
+  "model": "location.sucursal",
+  "pk": 2,
+  "fields": {
+    "nombre": "Tienda JLO",
+    "direccion": "Dirección Genérica"
+  }
+},
+{
+  "model": "location.sucursal",
+  "pk": 3,
+  "fields": {
+    "nombre": "Kiosko Real Plaza",
+    "direccion": "Dirección Genérica"
+  }
+},
+{
+  "model": "location.modalidad",
+  "pk": 1,
+  "fields": {
+    "nombre": "CALL CENTER",
+    "activo": true
+  }
+},
+{
+  "model": "location.modalidad",
+  "pk": 2,
+  "fields": {
+    "nombre": "CAMPO",
+    "activo": true
+  }
+},
+{
+  "model": "location.modalidad",
+  "pk": 3,
+  "fields": {
+    "nombre": "TIENDA",
+    "activo": true
+  }
+},
+{
+  "model": "sales.tipodocumento",
+  "pk": 1,
+  "fields": {
+    "codigo": "DNI",
+    "nombre": "DNI",
+    "longitud_exacta": 8,
+    "activo": true
+  }
+},
+{
+  "model": "sales.tipodocumento",
+  "pk": 2,
+  "fields": {
+    "codigo": "RUC",
+    "nombre": "RUC",
+    "longitud_exacta": 11,
+    "activo": true
+  }
+},
+{
+  "model": "sales.tipodocumento",
+  "pk": 3,
+  "fields": {
+    "codigo": "CE",
+    "nombre": "Carnet Extranjería",
+    "longitud_exacta": 9,
+    "activo": true
+  }
+},
+{
+  "model": "sales.producto",
+  "pk": 1,
+  "fields": {
+    "nombre_plan": "Fibra 100MB",
+    "es_alto_valor": false,
+    "costo_fijo_plan": "60.00",
+    "comision_base": "30.00",
+    "fecha_inicio_vigencia": "2026-02-12",
+    "fecha_fin_vigencia": null,
+    "activo": true
+  }
+},
+{
+  "model": "sales.producto",
+  "pk": 2,
+  "fields": {
+    "nombre_plan": "Fibra 300MB",
+    "es_alto_valor": true,
+    "costo_fijo_plan": "85.00",
+    "comision_base": "50.00",
+    "fecha_inicio_vigencia": "2026-02-12",
+    "fecha_fin_vigencia": null,
+    "activo": true
+  }
+},
+{
+  "model": "sales.producto",
+  "pk": 3,
+  "fields": {
+    "nombre_plan": "Full Claro Móvil",
+    "es_alto_valor": false,
+    "costo_fijo_plan": "45.00",
+    "comision_base": "20.00",
+    "fecha_inicio_vigencia": "2026-02-12",
+    "fecha_fin_vigencia": null,
+    "activo": true
+  }
+}
+]
