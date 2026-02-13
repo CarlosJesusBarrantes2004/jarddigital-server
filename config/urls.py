@@ -21,33 +21,30 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-# IMPORTACIONES NUEVAS PARA LA DOCUMENTACIÓN
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
-    SpectacularSwaggerView
+    SpectacularSwaggerView,
 )
-
 from django.contrib import admin
-from django.urls import path, include  # <--- Asegúrate de importar 'include'
+from django.urls import path, include
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from apps.users.views import CustomTokenObtainPairView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-
-    # Documentación (NO BORRAR)
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-
-    # Autenticación
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-
-    # --- TUS APPS ---
-    # Aquí conectamos la app de usuarios
-    path('api/users/', include('apps.users.urls')),
-    # Aquí conectamos para obtener las ventas
-    path('api/sales/', include('apps.sales.urls')),
-    # Aquí conectamos las Sucursales y Modalidades
-    path('api/location/', include('apps.location.urls')),
+    # Documentación
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path(
+        "api/docs/",
+        SpectacularSwaggerView.as_view(url_name="schema"),
+        name="swagger-ui",
+    ),
+    # Autenticación personalizada (Cookies)
+    path("api/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    # Apps
+    path("api/users/", include("apps.users.urls")),
+    path("api/sales/", include("apps.sales.urls")),
+    path("api/location/", include("apps.location.urls")),
 ]
