@@ -8,6 +8,7 @@ from .serializers import UserRegisterSerializer
 from django.conf import settings
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -36,6 +37,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 class UserMeView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses=UsuarioSerializer)
     def get(self, request):
         serializer = UsuarioSerializer(request.user)
         return Response(serializer.data)

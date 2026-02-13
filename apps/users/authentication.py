@@ -1,5 +1,6 @@
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.conf import settings
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
 
 class CustomCookieJWTAuthentication(JWTAuthentication):
@@ -28,3 +29,16 @@ class CustomCookieJWTAuthentication(JWTAuthentication):
 
         # 4. Devolver el usuario logueado
         return self.get_user(validated_token), validated_token
+
+class CustomCookieJWTAuthenticationScheme(OpenApiAuthenticationExtension):
+    # Apuntamos a la clase que creamos hoy
+    target_class = 'apps.users.authentication.CustomCookieJWTAuthentication'
+    name = 'cookieAuth'
+
+    def get_security_definition(self, auto_schema):
+        return {
+            'type': 'apiKey',
+            'in': 'cookie',
+            'name': 'access_token', # El nombre de tu cookie
+            'description': 'Autenticación mediante Cookie HttpOnly'
+        }
