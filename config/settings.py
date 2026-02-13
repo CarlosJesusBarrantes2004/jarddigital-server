@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     "apps.sales",
     "apps.tracking",
     "apps.finances",
-    "apps.location",
+    "apps.core",
     "apps.attendance",
 ]
 

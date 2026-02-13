@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from apps.core.models import Sucursal
 
 class ReglaSalarialMensual(models.Model):
     anio = models.IntegerField()
@@ -18,3 +19,16 @@ class EscalaSueldo(models.Model):
 
     class Meta:
         db_table = 'escalas_sueldo'
+
+class Asistencia(models.Model):
+    id_usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="asistencias"
+    )
+    id_sucursal = models.ForeignKey(
+        Sucursal, on_delete=models.CASCADE, related_name="asistencias"
+    )
+    fecha = models.DateField()
+    asistio = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "asistencia"

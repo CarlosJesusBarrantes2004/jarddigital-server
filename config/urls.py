@@ -36,5 +36,5 @@ urlpatterns = [
     # Apps
     path("api/users/", include("apps.users.urls")),
     path("api/sales/", include("apps.sales.urls")),
-    path("api/location/", include("apps.location.urls")),
+    path("api/core/", include("apps.core.urls")),
 ]

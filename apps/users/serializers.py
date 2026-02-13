@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Usuario, RolSistema
-from apps.location.models import Sucursal, ModalidadSede
+from apps.core.models import Sucursal, ModalidadSede
 
 class RolSistemaSerializer(serializers.ModelSerializer):
     class Meta:
