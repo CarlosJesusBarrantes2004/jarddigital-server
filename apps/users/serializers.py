@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Usuario, RolSistema
 from apps.core.models import Sucursal, ModalidadSede
+from drf_spectacular.utils import extend_schema_field
 
 class RolSistemaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -30,6 +31,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "sucursales",
         ]
 
+    @extend_schema_field(SucursalSimpleSerializer(many=True))
     def get_sucursales(self, obj):
         # 1. Buscamos a qué "Modalidades-Sede" tiene permiso este usuario
         modalidades_sede_ids = obj.permisos.values_list("id_modalidad_sede", flat=True)
