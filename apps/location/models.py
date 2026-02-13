@@ -28,21 +28,19 @@ class Asistencia(models.Model):
 
 
 class Modalidad(models.Model):
-    nombre = models.CharField(max_length=50)  # CALL, CAMPO
+    nombre = models.CharField(max_length=50) # Ej: CALL CENTER, CAMPO
     activo = models.BooleanField(default=True)
 
     class Meta:
         db_table = "modalidades"
 
-
 class ModalidadSede(models.Model):
-    id_sucursal = models.ForeignKey(Sucursal, on_delete=models.CASCADE)
+    id_sucursal = models.ForeignKey('Sucursal', on_delete=models.CASCADE)
     id_modalidad = models.ForeignKey(Modalidad, on_delete=models.CASCADE)
     activo = models.BooleanField(default=True)
 
     class Meta:
         db_table = "modalidades_sede"
-
 
 class SupervisorAsignacion(models.Model):
     id_modalidad_sede = models.ForeignKey(ModalidadSede, on_delete=models.CASCADE)

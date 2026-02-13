@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from .models import Usuario, RolSistema
-from location.models import Sucursal
-
+from apps.location.models import Sucursal, ModalidadSede
 
 class RolSistemaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -32,9 +31,20 @@ class UsuarioSerializer(serializers.ModelSerializer):
         ]
 
     def get_sucursales(self, obj):
-        sucursales_ids = obj.asistencias.values_list(
-            "id_sucursal", flat=True
-        ).distinct()
+        # 1. Buscamos a qué "Modalidades-Sede" tiene permiso este usuario
+        modalidades_sede_ids = obj.permisos.values_list("id_modalidad_sede", flat=True)
+
+        # Si es un usuario nuevo y no tiene permisos, devolvemos lista vacía
+        if not modalidades_sede_ids:
+            return []
+
+        # 2. Extraemos solo los IDs de las sucursales únicas de esas modalidades
+        sucursales_ids = ModalidadSede.objects.filter(
+            id__in=modalidades_sede_ids,
+            activo=True
+        ).values_list("id_sucursal", flat=True).distinct()
+
+        # 3. Traemos la info de esas sucursales
         queryset = Sucursal.objects.filter(id__in=sucursales_ids, activo=True)
         return SucursalSimpleSerializer(queryset, many=True).data
 
