@@ -34,14 +34,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 
 class UserMeView(APIView):
-    """
-    Devuelve los datos del usuario logueado basándose en su Token.
-    """
-
-    permission_classes = [IsAuthenticated]  # ¡Solo usuarios con Token entran aquí!
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # El usuario ya viene en 'request.user' gracias al Token
         serializer = UsuarioSerializer(request.user)
         return Response(serializer.data)
 
