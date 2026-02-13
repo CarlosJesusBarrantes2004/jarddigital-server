@@ -6,6 +6,10 @@ class Sucursal(models.Model):
     nombre = models.CharField(max_length=100)
     direccion = models.CharField(max_length=255)
 
+    # ¡NUEVOS CAMPOS!
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
     class Meta:
         db_table = 'sucursales'
 

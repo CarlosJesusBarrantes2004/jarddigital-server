@@ -48,4 +48,6 @@ urlpatterns = [
     path('api/users/', include('apps.users.urls')),
     # Aquí conectamos para obtener las ventas
     path('api/sales/', include('apps.sales.urls')),
+    # Aquí conectamos las Sucursales y Modalidades
+    path('api/location/', include('apps.location.urls')),
 ]
