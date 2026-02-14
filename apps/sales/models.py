@@ -3,7 +3,6 @@ from django.conf import settings
 from apps.core.models import ModalidadSede, TipoDocumento
 from apps.users.models import SupervisorAsignacion
 
-# --- CATÁLOGOS ---
 
 class EstadoSOT(models.Model):
     codigo = models.CharField(max_length=20, unique=True)
@@ -12,7 +11,7 @@ class EstadoSOT(models.Model):
     color_hex = models.CharField(max_length=7)
 
     class Meta:
-        db_table = 'estados_sot'
+        db_table = "estados_sot"
 
 
 class EstadoAudio(models.Model):
@@ -20,7 +19,7 @@ class EstadoAudio(models.Model):
     nombre = models.CharField(max_length=100)
 
     class Meta:
-        db_table = 'estados_audios'
+        db_table = "estados_audios"
 
 
 class GrabadorAudio(models.Model):
@@ -28,10 +27,8 @@ class GrabadorAudio(models.Model):
     activo = models.BooleanField(default=True)
 
     class Meta:
-        db_table = 'grabadores_audios'
+        db_table = "grabadores_audios"
 
-
-# --- PRODUCTOS ---
 
 class Producto(models.Model):
     nombre_plan = models.CharField(max_length=100)
@@ -43,16 +40,21 @@ class Producto(models.Model):
     activo = models.BooleanField(default=True)
 
     class Meta:
-        db_table = 'productos'
+        db_table = "productos"
 
 
 # --- VENTAS (CORE) ---
 
+
 class Venta(models.Model):
     # Relaciones de Estructura
-    id_asesor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='ventas_asesor')
+    id_asesor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="ventas_asesor"
+    )
     id_origen_venta = models.ForeignKey(ModalidadSede, on_delete=models.PROTECT)
-    id_supervisor_vigente = models.ForeignKey(SupervisorAsignacion, on_delete=models.PROTECT)
+    id_supervisor_vigente = models.ForeignKey(
+        SupervisorAsignacion, on_delete=models.PROTECT
+    )
 
     # Producto
     id_producto = models.ForeignKey(Producto, on_delete=models.PROTECT)
@@ -82,24 +84,31 @@ class Venta(models.Model):
     comentario_gestion = models.TextField(null=True, blank=True)
 
     # Audios
-    id_grabador_audios = models.ForeignKey(GrabadorAudio, on_delete=models.SET_NULL, null=True)
+    id_grabador_audios = models.ForeignKey(
+        GrabadorAudio, on_delete=models.SET_NULL, null=True
+    )
     audio_subido = models.BooleanField(default=False)
-    id_estado_audios = models.ForeignKey(EstadoAudio, on_delete=models.SET_NULL, null=True)
+    id_estado_audios = models.ForeignKey(
+        EstadoAudio, on_delete=models.SET_NULL, null=True
+    )
 
     # Auditoría
-    usuario_creacion = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
-                                         related_name='ventas_creadas')
+    usuario_creacion = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="ventas_creadas",
+    )
     fecha_creacion = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'ventas'
+        db_table = "ventas"
 
 
 class AudioVenta(models.Model):
-    id_venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name='audios')
+    id_venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name="audios")
     nombre_etiqueta = models.CharField(max_length=100)
     url_audio = models.CharField(max_length=255)
     fecha_subida = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'audios_venta'
+        db_table = "audios_venta"
