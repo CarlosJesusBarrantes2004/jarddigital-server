@@ -1,5 +1,6 @@
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
 from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .serializers import UsuarioSerializer
 from rest_framework import generics
@@ -7,7 +8,6 @@ from rest_framework.permissions import IsAdminUser
 from .serializers import UserRegisterSerializer
 from django.conf import settings
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 
@@ -57,6 +57,20 @@ class UserRegisterView(generics.CreateAPIView):
 
 
 class LogoutView(APIView):
+
+    @extend_schema(
+        summary="Cerrar Sesión",
+        description="Elimina la cookie de autenticación (JWT) del navegador del usuario.",
+        request=None,  # Le decimos que no necesitamos que envíen ningún JSON en el body
+        responses={
+            200: inline_serializer(
+                name='LogoutResponse',
+                fields={
+                    'detail': serializers.CharField(default='Sesión cerrada correctamente')
+                }
+            )
+        }
+    )
     def post(self, request):
         response = Response({"detail": "Sesión cerrada correctamente"}, status=200)
 
