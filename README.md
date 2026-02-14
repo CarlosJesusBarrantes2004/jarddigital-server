@@ -50,10 +50,12 @@ python manage.py migrate
 ## 📂 Estructura de Carpetas Principal
 ```bash
 ├── config/             # Configuración global de Django (settings, urls, wsgi)
-├── core/               # Aplicación principal del sistema
-│   ├── models.py       # Definición de tablas (Ventas, Usuarios, Sucursales, etc.)
-│   ├── serializers.py  # Serializadores para DRF
-│   ├── services.py     # Lógica de cálculos de liquidaciones y comisiones
-│   ├── views.py        # Controladores de la API
-│   └── urls.py         # Rutas específicas de la aplicación core
+├── apps/               # Módulos de la aplicación (Arquitectura DDD)
+│   ├── core/           # Sucursales y configuraciones empresariales
+│   ├── finances/       # Asistencias y reglas salariales
+│   ├── sales/          # Gestión de ventas y catálogos de productos
+│   ├── ubigeo/         # API geográfica de solo lectura (Departamentos, Provincias, Distritos)
+│   ├── tracking/       # Ocurre semanas/meses después de la instalación (Seguimiento, Seguimiento Mensual)
+│   └── users/          # Modelos de usuario, roles y serializadores de sesión
+├── initial_data.json   # Backup de datos semilla para el entorno de desarrollo
 └── manage.py           # Utilidad de administración de Django
