@@ -185,5 +185,49 @@
     "fecha": "2026-02-13",
     "asistio": true
   }
+},
+{
+  "model": "ubigeo.departamento",
+  "pk": 1,
+  "fields": {
+    "codigo_ubigeo": "14",
+    "nombre": "Lambayeque"
+  }
+},
+{
+  "model": "ubigeo.provincia",
+  "pk": 1,
+  "fields": {
+    "id_departamento": 1,
+    "codigo_ubigeo": "1401",
+    "nombre": "Chiclayo"
+  }
+},
+{
+  "model": "ubigeo.distrito",
+  "pk": 1,
+  "fields": {
+    "id_provincia": 1,
+    "codigo_ubigeo": "140101",
+    "nombre": "Chiclayo"
+  }
+},
+{
+  "model": "ubigeo.distrito",
+  "pk": 2,
+  "fields": {
+    "id_provincia": 1,
+    "codigo_ubigeo": "140105",
+    "nombre": "José Leonardo Ortiz"
+  }
+},
+{
+  "model": "ubigeo.distrito",
+  "pk": 3,
+  "fields": {
+    "id_provincia": 1,
+    "codigo_ubigeo": "140106",
+    "nombre": "La Victoria"
+  }
 }
 ]

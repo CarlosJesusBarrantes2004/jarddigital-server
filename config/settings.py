@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "apps.finances",
     "apps.core",
     "apps.attendance",
+    "apps.ubigeo",
 ]
 
 MIDDLEWARE = [
