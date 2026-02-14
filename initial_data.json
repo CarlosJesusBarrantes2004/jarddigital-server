@@ -106,6 +106,28 @@
   }
 },
 {
+  "model": "users.usuario",
+  "pk": 4,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$pcQ3xhKwiwOi6vHT2ShwE4$TEu6mvxXdu31qTpXZKjuY7EqHhDTzktIuAKK3sDbfVk=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "hector",
+    "first_name": "",
+    "last_name": "",
+    "email": "hector@jarddigital.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-02-14T04:36:36.667Z",
+    "nombre_completo": "Hector Ordoñez",
+    "id_rol": 1,
+    "activo": true,
+    "creado_en": "2026-02-14T04:36:37.447Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
   "model": "users.permisoacceso",
   "pk": 1,
   "fields": {
