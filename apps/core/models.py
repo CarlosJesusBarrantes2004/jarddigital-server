@@ -27,17 +27,6 @@ class ModalidadSede(models.Model):
     class Meta:
         db_table = "modalidades_sede"
 
-class SupervisorAsignacion(models.Model):
-    id_modalidad_sede = models.ForeignKey(ModalidadSede, on_delete=models.CASCADE)
-    id_supervisor = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE
-    )
-    fecha_inicio = models.DateField()
-    fecha_fin = models.DateField(null=True, blank=True)
-    activo = models.BooleanField(default=True)
-
-    class Meta:
-        db_table = "supervisor_asignacion"
 
 class TipoDocumento(models.Model):
     codigo = models.CharField(max_length=10, unique=True) # Ej: DNI, RUC, CE

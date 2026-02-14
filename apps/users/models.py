@@ -35,3 +35,15 @@ class PermisoAcceso(models.Model):
 
     class Meta:
         db_table = "permisos_acceso"
+
+class SupervisorAsignacion(models.Model):
+    id_modalidad_sede = models.ForeignKey(ModalidadSede, on_delete=models.CASCADE)
+    id_supervisor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE
+    )
+    fecha_inicio = models.DateField()
+    fecha_fin = models.DateField(null=True, blank=True)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "supervisor_asignacion"

@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
-from apps.core.models import ModalidadSede, SupervisorAsignacion, TipoDocumento
+from apps.core.models import ModalidadSede, TipoDocumento
+from apps.users.models import SupervisorAsignacion
 
 # --- CATÁLOGOS ---
 
