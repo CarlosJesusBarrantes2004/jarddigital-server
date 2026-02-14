@@ -47,7 +47,6 @@ INSTALLED_APPS = [
     "apps.tracking",
     "apps.finances",
     "apps.core",
-    "apps.attendance",
     "apps.ubigeo",
 ]
 
