@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Usuario, RolSistema
+from django.db import transaction
+from .models import Usuario, RolSistema, PermisoAcceso
 from apps.core.models import Sucursal, ModalidadSede
 from drf_spectacular.utils import extend_schema_field
 
@@ -62,21 +63,42 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
+    # 1. Agregamos el campo para recibir los IDs (solo de escritura, no se devuelve en el GET)
+    ids_modalidades_sede = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False  # Opcional, por si creas al Dueño y no necesita sede
+    )
 
     class Meta:
         model = Usuario
         fields = [
-            "username",
-            "password",
-            "nombre_completo",
-            "email",
-            "id_rol",
-            "activo",
+            'username', 'password', 'nombre_completo', 'email',
+            'id_rol', 'activo', 'ids_modalidades_sede'
         ]
 
     def create(self, validated_data):
-        password = validated_data.pop("password")
+        # 2. Separamos los IDs de la data del usuario antes de guardarlo
+        ids_sedes = validated_data.pop('ids_modalidades_sede', [])
+        password = validated_data.pop('password', None)
 
-        user = Usuario.objects.create_user(password=password, **validated_data)
-        return user
+        # 3. ¡EL ESCUDO PROTECTOR! (Transacción atómica)
+        with transaction.atomic():
+            # Paso A: Creamos el usuario
+            usuario = Usuario(**validated_data)
+            if password:
+                usuario.set_password(password)  # Encriptamos la clave
+            usuario.save()
+
+            # Paso B: Creamos los permisos de acceso a las sedes
+            permisos_a_crear = []
+            for mod_id in ids_sedes:
+                permisos_a_crear.append(
+                    PermisoAcceso(id_usuario=usuario, id_modalidad_sede_id=mod_id)
+                )
+
+            # bulk_create hace un solo INSERT masivo en SQL (Super optimizado)
+            if permisos_a_crear:
+                PermisoAcceso.objects.bulk_create(permisos_a_crear)
+
+        return usuario
