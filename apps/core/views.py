@@ -1,8 +1,8 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Sucursal, Modalidad
-from .serializers import SucursalSerializer, ModalidadSerializer
+from .models import Sucursal, Modalidad, TipoDocumento
+from .serializers import SucursalSerializer, ModalidadSerializer, TipoDocumentoSerializer
 
 class SucursalViewSet(viewsets.ModelViewSet):
     # Solo listamos las sucursales que estén activas
@@ -27,3 +27,10 @@ class ModalidadViewSet(viewsets.ModelViewSet):
         modalidad.activo = False
         modalidad.save()
         return Response({"mensaje": "Modalidad desactivada correctamente"}, status=status.HTTP_204_NO_CONTENT)
+
+class TipoDocumentoViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Lista todos los tipos de documento activos (DNI, RUC, CE, etc.)
+    """
+    queryset = TipoDocumento.objects.filter(activo=True)
+    serializer_class = TipoDocumentoSerializer

@@ -38,3 +38,17 @@ class SupervisorAsignacion(models.Model):
 
     class Meta:
         db_table = "supervisor_asignacion"
+
+class TipoDocumento(models.Model):
+    codigo = models.CharField(max_length=10, unique=True) # Ej: DNI, RUC, CE
+    nombre = models.CharField(max_length=50)
+    longitud_exacta = models.IntegerField(null=True, blank=True) # 8 para DNI, 11 para RUC
+    regex_validacion = models.CharField(max_length=100, null=True, blank=True)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "tipos_documento"
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"

@@ -177,6 +177,50 @@
   }
 },
 {
+  "model": "core.tipodocumento",
+  "pk": 1,
+  "fields": {
+    "codigo": "DNI",
+    "nombre": "Documento Nacional de Identidad",
+    "longitud_exacta": 8,
+    "regex_validacion": "^[0-9]{8}$",
+    "activo": true
+  }
+},
+{
+  "model": "core.tipodocumento",
+  "pk": 2,
+  "fields": {
+    "codigo": "RUC",
+    "nombre": "Registro Único de Contribuyentes",
+    "longitud_exacta": 11,
+    "regex_validacion": "^[0-9]{11}$",
+    "activo": true
+  }
+},
+{
+  "model": "core.tipodocumento",
+  "pk": 3,
+  "fields": {
+    "codigo": "CE",
+    "nombre": "Carnet de Extranjería",
+    "longitud_exacta": 9,
+    "regex_validacion": "^[A-Z0-9]{9}$",
+    "activo": true
+  }
+},
+{
+  "model": "core.tipodocumento",
+  "pk": 4,
+  "fields": {
+    "codigo": "PAS",
+    "nombre": "Pasaporte",
+    "longitud_exacta": null,
+    "regex_validacion": null,
+    "activo": true
+  }
+},
+{
   "model": "finances.asistencia",
   "pk": 1,
   "fields": {

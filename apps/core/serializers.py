@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Sucursal, Modalidad
+from .models import Sucursal, Modalidad, TipoDocumento
 
 class SucursalSerializer(serializers.ModelSerializer):
     class Meta:
@@ -10,3 +10,8 @@ class ModalidadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Modalidad
         fields = '__all__'
+
+class TipoDocumentoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TipoDocumento
+        fields = ['id', 'codigo', 'nombre', 'longitud_exacta', 'regex_validacion', 'activo']

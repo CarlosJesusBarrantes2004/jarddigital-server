@@ -1,18 +1,8 @@
 from django.db import models
 from django.conf import settings
-from apps.core.models import ModalidadSede, SupervisorAsignacion
+from apps.core.models import ModalidadSede, SupervisorAsignacion, TipoDocumento
 
 # --- CATÁLOGOS ---
-
-class TipoDocumento(models.Model):
-    codigo = models.CharField(max_length=10, unique=True)
-    nombre = models.CharField(max_length=100)
-    longitud_exacta = models.IntegerField()
-    activo = models.BooleanField(default=True)
-
-    class Meta:
-        db_table = 'tipos_documento'
-
 
 class EstadoSOT(models.Model):
     codigo = models.CharField(max_length=20, unique=True)
