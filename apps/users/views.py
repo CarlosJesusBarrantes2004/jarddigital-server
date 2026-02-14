@@ -9,6 +9,7 @@ from django.conf import settings
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
+from rest_framework.response import Response
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -53,3 +54,14 @@ class UserRegisterView(generics.CreateAPIView):
     serializer_class = UserRegisterSerializer
     # ¡Candado! Solo admins pueden entrar aquí
     permission_classes = [IsAdminUser]
+
+
+class LogoutView(APIView):
+    def post(self, request):
+        response = Response({"detail": "Sesión cerrada correctamente"}, status=200)
+
+        response.delete_cookie(
+            settings.AUTH_COOKIE, path="/", samesite=settings.AUTH_COOKIE_SAMESITE
+        )
+
+        return response

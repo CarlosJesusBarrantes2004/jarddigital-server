@@ -27,7 +27,6 @@ class Usuario(AbstractUser):
 
 
 class PermisoAcceso(models.Model):
-    # Aquí unimos al usuario con la sede a través del related_name="permisos"
     id_usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="permisos"
     )

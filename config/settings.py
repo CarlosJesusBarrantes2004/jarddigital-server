@@ -52,6 +52,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -86,9 +87,9 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "jarddigital_db",
-        "USER": "arch",
-        "PASSWORD": "david2004",
+        "NAME": "jarddigital-db",
+        "USER": "postgres",
+        "PASSWORD": "Barrantes2004",
         "HOST": "localhost",
         "PORT": "5432",
     }
