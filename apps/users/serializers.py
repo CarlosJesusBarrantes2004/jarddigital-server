@@ -9,10 +9,12 @@ class RolSistemaSerializer(serializers.ModelSerializer):
         fields = ["id", "codigo", "nombre", "nivel_jerarquia"]
 
 
-class SucursalSimpleSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Sucursal
-        fields = ["id", "nombre"]
+# 1. Creamos la estructura visual para Swagger y el Frontend
+class SucursalModalidadSerializer(serializers.Serializer):
+    id_sucursal = serializers.IntegerField()
+    nombre_sucursal = serializers.CharField()
+    id_modalidad = serializers.IntegerField()
+    nombre_modalidad = serializers.CharField()
 
 
 class UsuarioSerializer(serializers.ModelSerializer):
@@ -31,24 +33,32 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "sucursales",
         ]
 
-    @extend_schema_field(SucursalSimpleSerializer(many=True))
+    # 2. Le decimos a Swagger que use la nueva estructura
+    @extend_schema_field(SucursalModalidadSerializer(many=True))
     def get_sucursales(self, obj):
-        # 1. Buscamos a qué "Modalidades-Sede" tiene permiso este usuario
-        modalidades_sede_ids = obj.permisos.values_list("id_modalidad_sede", flat=True)
+        # 3. Viajamos por los permisos trayendo Sucursal y Modalidad en UNA sola consulta (JOIN)
+        # Filtramos para asegurarnos de que todo en la cadena siga activo
+        permisos_activos = obj.permisos.filter(
+            id_modalidad_sede__activo=True,
+            id_modalidad_sede__id_sucursal__activo=True,
+            id_modalidad_sede__id_modalidad__activo=True
+        ).select_related(
+            'id_modalidad_sede__id_sucursal',
+            'id_modalidad_sede__id_modalidad'
+        )
 
-        # Si es un usuario nuevo y no tiene permisos, devolvemos lista vacía
-        if not modalidades_sede_ids:
-            return []
+        # 4. Armamos el array con la data combinada para tu compañero
+        resultado = []
+        for permiso in permisos_activos:
+            mod_sede = permiso.id_modalidad_sede
+            resultado.append({
+                "id_sucursal": mod_sede.id_sucursal.id,
+                "nombre_sucursal": mod_sede.id_sucursal.nombre,
+                "id_modalidad": mod_sede.id_modalidad.id,
+                "nombre_modalidad": mod_sede.id_modalidad.nombre
+            })
 
-        # 2. Extraemos solo los IDs de las sucursales únicas de esas modalidades
-        sucursales_ids = ModalidadSede.objects.filter(
-            id__in=modalidades_sede_ids,
-            activo=True
-        ).values_list("id_sucursal", flat=True).distinct()
-
-        # 3. Traemos la info de esas sucursales
-        queryset = Sucursal.objects.filter(id__in=sucursales_ids, activo=True)
-        return SucursalSimpleSerializer(queryset, many=True).data
+        return resultado
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
