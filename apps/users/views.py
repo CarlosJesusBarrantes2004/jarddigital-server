@@ -1,5 +1,5 @@
 from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers
+from rest_framework import serializers, filters
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from .serializers import UsuarioSerializer, UsuarioAdminSerializer, RolSistemaSerializer
@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAdminUser
 from .models import Usuario, RolSistema
 from apps.core.mixins import SoftDeleteModelViewSet
 from django.conf import settings
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework_simplejwt.views import TokenObtainPairView
 from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
@@ -60,6 +61,17 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
 
     serializer_class = UsuarioAdminSerializer
     permission_classes = [IsAdminUser]
+
+    # 1. Activamos los motores de búsqueda y filtrado de DRF
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+
+    # 2. FILTROS EXACTOS (Para los <select> del frontend)
+    # ¿Quieres ver solo a los asesores? ?id_rol=2
+    filterset_fields = ['id_rol']
+
+    # 3. BARRA DE BÚSQUEDA (Para el <input type="text"> del frontend)
+    # Si el usuario escribe "Juan", Django buscará en todos estos campos a la vez
+    search_fields = ['nombre_completo', 'username', 'email']
 
 
 class LogoutView(APIView):
