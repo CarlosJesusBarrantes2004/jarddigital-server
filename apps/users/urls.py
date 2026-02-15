@@ -3,8 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import UserMeView, UsuarioViewSet, LogoutView
 
 router = DefaultRouter()
-# Esto crea automáticamente /api/users/gestion/ y /api/users/gestion/<id>/
-router.register(r'gestion', UsuarioViewSet, basename='gestion-usuarios')
+# Esto crea automáticamente /api/users/empleados/ y /api/users/empleados/<id>/
+router.register(r'empleados', UsuarioViewSet, basename='empleados')
 
 urlpatterns = [
     path("me/", UserMeView.as_view(), name="user-me"),

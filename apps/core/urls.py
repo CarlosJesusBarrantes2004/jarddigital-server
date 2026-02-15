@@ -7,7 +7,7 @@ router = DefaultRouter()
 router.register(r'sucursales', SucursalViewSet, basename='sucursal')
 router.register(r'modalidades', ModalidadViewSet, basename='modalidad')
 router.register(r'tipos-documento', TipoDocumentoViewSet, basename='tipo-documento')
-router.register(r'opciones-sedes', ModalidadSedeOpcionesViewSet, basename='opciones-sedes')
+router.register(r'sucursales-modalidades', ModalidadSedeOpcionesViewSet, basename='sucursal-modalidad')
 
 urlpatterns = [
     path('', include(router.urls)),
