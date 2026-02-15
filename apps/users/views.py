@@ -5,7 +5,9 @@ from rest_framework.permissions import IsAuthenticated
 from .serializers import UsuarioSerializer
 from rest_framework import generics
 from rest_framework.permissions import IsAdminUser
-from .serializers import UserRegisterSerializer
+from .serializers import UsuarioAdminSerializer
+from .models import Usuario
+from apps.core.mixins import SoftDeleteModelViewSet
 from django.conf import settings
 from rest_framework_simplejwt.views import TokenObtainPairView
 from drf_spectacular.utils import extend_schema
@@ -44,15 +46,16 @@ class UserMeView(APIView):
         return Response(serializer.data)
 
 
-class UserRegisterView(generics.CreateAPIView):
-    """
-    Endpoint para crear nuevos usuarios (Vendedores, Supervisores, etc.)
-    Solo accesible por administradores.
-    """
+# En 4 líneas obtenemos GET, POST, PUT, PATCH y DELETE lógico.
+class UsuarioViewSet(SoftDeleteModelViewSet):
+    # Usamos prefetch_related para traer todos los permisos, sucursales y modalidades
+    # en 2 consultas gigantes en lugar de 100 pequeñitas. ¡Rendimiento puro!
+    queryset = Usuario.objects.prefetch_related(
+        'permisos__id_modalidad_sede__id_sucursal',
+        'permisos__id_modalidad_sede__id_modalidad'
+    ).all()
 
-    # Usamos el serializador que acabamos de crear
-    serializer_class = UserRegisterSerializer
-    # ¡Candado! Solo admins pueden entrar aquí
+    serializer_class = UsuarioAdminSerializer
     permission_classes = [IsAdminUser]
 
 

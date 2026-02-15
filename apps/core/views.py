@@ -4,9 +4,13 @@ from .mixins import SoftDeleteModelViewSet # Importamos el superpoder
 from .models import Sucursal, Modalidad, TipoDocumento, ModalidadSede
 from .serializers import SucursalSerializer, ModalidadSerializer, TipoDocumentoSerializer, ModalidadSedeOpcionesSerializer
 
+
 class SucursalViewSet(SoftDeleteModelViewSet):
-    # ¡Importante! Aquí le pasamos .all() para que el mixin haga el trabajo sucio de filtrar
-    queryset = Sucursal.objects.all()
+    # Optimizamos la consulta para que traiga las relaciones puente y las modalidades de golpe
+    queryset = Sucursal.objects.prefetch_related(
+        'modalidadsede_set__id_modalidad'
+    ).all()
+
     serializer_class = SucursalSerializer
     permission_classes = [IsAuthenticated]
 
