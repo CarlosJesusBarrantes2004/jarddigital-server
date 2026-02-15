@@ -2,11 +2,9 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from .serializers import UsuarioSerializer
-from rest_framework import generics
+from .serializers import UsuarioSerializer, UsuarioAdminSerializer, RolSistemaSerializer
 from rest_framework.permissions import IsAdminUser
-from .serializers import UsuarioAdminSerializer
-from .models import Usuario
+from .models import Usuario, RolSistema
 from apps.core.mixins import SoftDeleteModelViewSet
 from django.conf import settings
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -36,6 +34,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
         return response
 
+class RolSistemaViewSet(SoftDeleteModelViewSet):
+    """CRUD de los roles del sistema (Dueño, Supervisor, Asesor)"""
+    queryset = RolSistema.objects.all()
+    serializer_class = RolSistemaSerializer
+    permission_classes = [IsAdminUser] # Solo los superadmins pueden crear nuevos roles
 
 class UserMeView(APIView):
     permission_classes = [IsAuthenticated]

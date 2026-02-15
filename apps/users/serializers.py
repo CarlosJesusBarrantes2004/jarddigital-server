@@ -8,7 +8,7 @@ from drf_spectacular.utils import extend_schema_field
 class RolSistemaSerializer(serializers.ModelSerializer):
     class Meta:
         model = RolSistema
-        fields = ["id", "codigo", "nombre", "nivel_jerarquia"]
+        fields = ["id", "codigo", "nombre", "nivel_jerarquia", "activo"]
 
 
 # 1. Creamos la estructura visual para Swagger y el Frontend
