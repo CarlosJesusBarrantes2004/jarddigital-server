@@ -1,7 +1,9 @@
 from rest_framework import viewsets
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from .models import Departamento, Provincia, Distrito
 from .serializers import DepartamentoSerializer, ProvinciaSerializer, DistritoSerializer
+
 
 class DepartamentoViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -13,39 +15,24 @@ class DepartamentoViewSet(viewsets.ReadOnlyModelViewSet):
 
 class ProvinciaViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    Lista las provincias. Permite filtrar por id_departamento.
+    Lista las provincias. Permite filtrar por id_departamento en cascada.
     """
+    queryset = Provincia.objects.all()
     serializer_class = ProvinciaSerializer
 
-    @extend_schema(
-        parameters=[
-            OpenApiParameter(name="id_departamento", description="Filtrar provincias por ID de Departamento", required=False, type=int),
-        ]
-    )
-    def get_queryset(self):
-        queryset = Provincia.objects.all()
-        # Si el frontend envía el parámetro ?id_departamento=X, filtramos la lista
-        id_departamento = self.request.query_params.get('id_departamento', None)
-        if id_departamento is not None:
-            queryset = queryset.filter(id_departamento=id_departamento)
-        return queryset
+    # 1. Activamos el motor de filtros exactos
+    filter_backends = [DjangoFilterBackend]
+    # 2. Le decimos por qué campo (exactamente como se llama en tu modelo) se puede filtrar
+    filterset_fields = ['id_departamento']
 
 
 class DistritoViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    Lista los distritos. Permite filtrar por id_provincia.
+    Lista los distritos. Permite filtrar por id_provincia en cascada.
     """
+    queryset = Distrito.objects.all()
     serializer_class = DistritoSerializer
 
-    @extend_schema(
-        parameters=[
-            OpenApiParameter(name="id_provincia", description="Filtrar distritos por ID de Provincia", required=False, type=int),
-        ]
-    )
-    def get_queryset(self):
-        queryset = Distrito.objects.all()
-        # Si el frontend envía el parámetro ?id_provincia=Y, filtramos la lista
-        id_provincia = self.request.query_params.get('id_provincia', None)
-        if id_provincia is not None:
-            queryset = queryset.filter(id_provincia=id_provincia)
-        return queryset
+    # Repetimos la magia para los distritos
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['id_provincia']
