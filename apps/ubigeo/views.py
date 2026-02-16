@@ -1,6 +1,6 @@
 from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema, OpenApiParameter
 from .models import Departamento, Provincia, Distrito
 from .serializers import DepartamentoSerializer, ProvinciaSerializer, DistritoSerializer
 
@@ -11,6 +11,7 @@ class DepartamentoViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Departamento.objects.all()
     serializer_class = DepartamentoSerializer
+    permission_classes = [IsAuthenticated]
 
 
 class ProvinciaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -19,6 +20,7 @@ class ProvinciaViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Provincia.objects.all()
     serializer_class = ProvinciaSerializer
+    permission_classes = [IsAuthenticated]
 
     # 1. Activamos el motor de filtros exactos
     filter_backends = [DjangoFilterBackend]
@@ -32,6 +34,7 @@ class DistritoViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Distrito.objects.all()
     serializer_class = DistritoSerializer
+    permission_classes = [IsAuthenticated]
 
     # Repetimos la magia para los distritos
     filter_backends = [DjangoFilterBackend]

@@ -3,7 +3,7 @@ from rest_framework import serializers, filters
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from .serializers import UsuarioSerializer, UsuarioAdminSerializer, RolSistemaSerializer
-from rest_framework.permissions import IsAdminUser
+from .permissions import PuedeGestionarUsuarios, SoloLecturaRolesOCrearDueno
 from .models import Usuario, RolSistema
 from apps.core.mixins import SoftDeleteModelViewSet
 from django.conf import settings
@@ -39,7 +39,7 @@ class RolSistemaViewSet(SoftDeleteModelViewSet):
     """CRUD de los roles del sistema (Dueño, Supervisor, Asesor)"""
     queryset = RolSistema.objects.all()
     serializer_class = RolSistemaSerializer
-    permission_classes = [IsAdminUser] # Solo los superadmins pueden crear nuevos roles
+    permission_classes = [IsAuthenticated, SoloLecturaRolesOCrearDueno]
 
 class UserMeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -60,7 +60,7 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
     ).all()
 
     serializer_class = UsuarioAdminSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, PuedeGestionarUsuarios]
 
     # 1. Activamos los motores de búsqueda y filtrado de DRF
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
@@ -75,6 +75,8 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
 
 
 class LogoutView(APIView):
+    # Protegemos el logout para que no explote si entra alguien sin sesión
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         summary="Cerrar Sesión",

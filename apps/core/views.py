@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from .mixins import SoftDeleteModelViewSet # Importamos el superpoder
 from .models import Sucursal, Modalidad, TipoDocumento, ModalidadSede
 from .serializers import SucursalSerializer, ModalidadSerializer, TipoDocumentoSerializer, ModalidadSedeOpcionesSerializer
-
+from .permissions import SoloLecturaModificarJefaturas
 
 class SucursalViewSet(SoftDeleteModelViewSet):
     # Optimizamos la consulta para que traiga las relaciones puente y las modalidades de golpe
@@ -12,13 +12,13 @@ class SucursalViewSet(SoftDeleteModelViewSet):
     ).all()
 
     serializer_class = SucursalSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, SoloLecturaModificarJefaturas]
 
 class ModalidadViewSet(SoftDeleteModelViewSet):
     # Cambiamos el .filter() por .all() igual que arriba
     queryset = Modalidad.objects.all()
     serializer_class = ModalidadSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, SoloLecturaModificarJefaturas]
 
 class TipoDocumentoViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -28,7 +28,7 @@ class TipoDocumentoViewSet(viewsets.ReadOnlyModelViewSet):
     # Por lo tanto, NO necesita heredar nuestro SoftDeleteModelViewSet, se queda tal cual.
     queryset = TipoDocumento.objects.filter(activo=True)
     serializer_class = TipoDocumentoSerializer
-
+    permission_classes = [IsAuthenticated]
 
 class ModalidadSedeOpcionesViewSet(viewsets.ReadOnlyModelViewSet):
     """API para que el frontend llene sus combos de Sucursal+Modalidad"""
@@ -39,3 +39,4 @@ class ModalidadSedeOpcionesViewSet(viewsets.ReadOnlyModelViewSet):
     ).select_related('id_sucursal', 'id_modalidad')
 
     serializer_class = ModalidadSedeOpcionesSerializer
+    permission_classes = [IsAuthenticated]
