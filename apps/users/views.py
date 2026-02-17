@@ -54,7 +54,7 @@ class UserMeView(APIView):
 class UsuarioViewSet(SoftDeleteModelViewSet):
     # Usamos prefetch_related para traer todos los permisos, sucursales y modalidades
     # en 2 consultas gigantes en lugar de 100 pequeñitas. ¡Rendimiento puro!
-    queryset = Usuario.objects.prefetch_related(
+    queryset = Usuario.objects.select_related('id_rol').prefetch_related(
         'permisos__id_modalidad_sede__id_sucursal',
         'permisos__id_modalidad_sede__id_modalidad'
     ).all()

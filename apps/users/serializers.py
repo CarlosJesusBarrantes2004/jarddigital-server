@@ -38,27 +38,21 @@ class UsuarioSerializer(serializers.ModelSerializer):
     # 2. Le decimos a Swagger que use la nueva estructura
     @extend_schema_field(SucursalModalidadSerializer(many=True))
     def get_sucursales(self, obj):
-        # 3. Viajamos por los permisos trayendo Sucursal y Modalidad en UNA sola consulta (JOIN)
-        # Filtramos para asegurarnos de que todo en la cadena siga activo
-        permisos_activos = obj.permisos.filter(
-            id_modalidad_sede__activo=True,
-            id_modalidad_sede__id_sucursal__activo=True,
-            id_modalidad_sede__id_modalidad__activo=True
-        ).select_related(
-            'id_modalidad_sede__id_sucursal',
-            'id_modalidad_sede__id_modalidad'
-        )
+        # 1. Usamos .all() para leer desde la memoria RAM (Requiere prefetch_related en la Vista)
+        permisos = obj.permisos.all()
 
-        # 4. Armamos el array con la data combinada para tu compañero
         resultado = []
-        for permiso in permisos_activos:
+        for permiso in permisos:
             mod_sede = permiso.id_modalidad_sede
-            resultado.append({
-                "id_sucursal": mod_sede.id_sucursal.id,
-                "nombre_sucursal": mod_sede.id_sucursal.nombre,
-                "id_modalidad": mod_sede.id_modalidad.id,
-                "nombre_modalidad": mod_sede.id_modalidad.nombre
-            })
+
+            # 2. Hacemos el filtro de activos en Python, ¡cero impacto a Postgres!
+            if mod_sede.activo and mod_sede.id_sucursal.activo and mod_sede.id_modalidad.activo:
+                resultado.append({
+                    "id_sucursal": mod_sede.id_sucursal.id,
+                    "nombre_sucursal": mod_sede.id_sucursal.nombre,
+                    "id_modalidad": mod_sede.id_modalidad.id,
+                    "nombre_modalidad": mod_sede.id_modalidad.nombre
+                })
 
         return resultado
 
@@ -82,22 +76,24 @@ class UsuarioAdminSerializer(serializers.ModelSerializer):
     # 2. Reutilizamos la lógica que ya teníamos (Asegúrate de tener importado SucursalModalidadSerializer)
     @extend_schema_field(SucursalModalidadSerializer(many=True))
     def get_sucursales(self, obj):
-        permisos_activos = obj.permisos.filter(
-            id_modalidad_sede__activo=True,
-            id_modalidad_sede__id_sucursal__activo=True,
-            id_modalidad_sede__id_modalidad__activo=True
-        )
+        # 1. Usamos .all() para leer desde la memoria RAM (Requiere prefetch_related en la Vista)
+        permisos = obj.permisos.all()
 
         resultado = []
-        for permiso in permisos_activos:
+        for permiso in permisos:
             mod_sede = permiso.id_modalidad_sede
-            resultado.append({
-                "id_sucursal": mod_sede.id_sucursal.id,
-                "nombre_sucursal": mod_sede.id_sucursal.nombre,
-                "id_modalidad": mod_sede.id_modalidad.id,
-                "nombre_modalidad": mod_sede.id_modalidad.nombre
-            })
+
+            # 2. Hacemos el filtro de activos en Python, ¡cero impacto a Postgres!
+            if mod_sede.activo and mod_sede.id_sucursal.activo and mod_sede.id_modalidad.activo:
+                resultado.append({
+                    "id_sucursal": mod_sede.id_sucursal.id,
+                    "nombre_sucursal": mod_sede.id_sucursal.nombre,
+                    "id_modalidad": mod_sede.id_modalidad.id,
+                    "nombre_modalidad": mod_sede.id_modalidad.nombre
+                })
+
         return resultado
+
 
     def create(self, validated_data):
         ids_sedes = validated_data.pop('ids_modalidades_sede', [])
