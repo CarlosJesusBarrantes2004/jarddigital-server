@@ -8,7 +8,7 @@ from .permissions import SoloLecturaModificarJefaturas
 class SucursalViewSet(SoftDeleteModelViewSet):
     # Optimizamos la consulta para que traiga las relaciones puente y las modalidades de golpe
     queryset = Sucursal.objects.prefetch_related(
-        'modalidadsede_set__id_modalidad'
+        'modalidades_sede__id_modalidad'
     ).all()
 
     serializer_class = SucursalSerializer

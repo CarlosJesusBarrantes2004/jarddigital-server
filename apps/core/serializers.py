@@ -25,14 +25,14 @@ class SucursalSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(ModalidadMiniSerializer(many=True))
     def get_modalidades(self, obj):
-        # Viajamos por la tabla puente para traer las modalidades activas
-        relaciones = ModalidadSede.objects.filter(
-            id_sucursal=obj,
-            activo=True,
-            id_modalidad__activo=True
-        ).select_related('id_modalidad')
 
-        return [{"id": rel.id_modalidad.id, "nombre": rel.id_modalidad.nombre} for rel in relaciones]
+        relaciones = obj.modalidades_sede.all()
+
+        return [
+            {"id": rel.id_modalidad.id, "nombre": rel.id_modalidad.nombre}
+            for rel in relaciones
+            if rel.activo and rel.id_modalidad.activo  # Filtramos en memoria, no en BD
+        ]
 
     def create(self, validated_data):
         ids_mods = validated_data.pop('ids_modalidades', [])
