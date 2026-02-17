@@ -4,13 +4,11 @@ from django.conf import settings
 class Sucursal(models.Model):
     nombre = models.CharField(max_length=100)
     direccion = models.CharField(max_length=255)
-
     activo = models.BooleanField(default=True)
     creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "sucursales"
-
 
 class Modalidad(models.Model):
     nombre = models.CharField(max_length=50) # Ej: CALL CENTER, CAMPO
@@ -20,13 +18,22 @@ class Modalidad(models.Model):
         db_table = "modalidades"
 
 class ModalidadSede(models.Model):
-    id_sucursal = models.ForeignKey('Sucursal', on_delete=models.CASCADE)
-    id_modalidad = models.ForeignKey(Modalidad, on_delete=models.CASCADE)
+    id_sucursal = models.ForeignKey(
+        'Sucursal',
+        on_delete=models.CASCADE,
+        db_column="id_sucursal",
+        related_name="modalidades_sede"
+    )
+    id_modalidad = models.ForeignKey(
+        'Modalidad',
+        on_delete=models.CASCADE,
+        db_column="id_modalidad",
+        related_name="sedes_asociadas"
+    )
     activo = models.BooleanField(default=True)
 
     class Meta:
         db_table = "modalidades_sede"
-
 
 class TipoDocumento(models.Model):
     codigo = models.CharField(max_length=10, unique=True) # Ej: DNI, RUC, CE
