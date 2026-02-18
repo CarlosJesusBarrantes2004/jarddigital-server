@@ -1,9 +1,9 @@
 from django.core.management.base import BaseCommand
-from apps.users.models import RolSistema
+from apps.users.models import RolSistema, Usuario
 from apps.core.models import TipoDocumento, Modalidad, Sucursal
 from apps.ubigeo.models import Departamento, Provincia, Distrito
 # ¡Importamos los nuevos modelos de ventas!
-from apps.sales.models import EstadoAudio, EstadoSOT, SubEstadoSOT, Producto
+from apps.sales.models import EstadoAudio, EstadoSOT, SubEstadoSOT, Producto, GrabadorAudio
 
 class Command(BaseCommand):
     help = 'Puebla la base de datos con los catálogos iniciales (Roles, Documentos, Sucursales, Modalidades y Catálogos de Ventas)'
@@ -68,6 +68,26 @@ class Command(BaseCommand):
         # ==========================================
         # MÓDULO SALES (NUEVO)
         # ==========================================
+
+        # 9. POBLAR GRABADORES (Lógica Híbrida)
+        # 9.1 Creamos el registro por defecto "OTROS" (Sin usuario asociado)
+        GrabadorAudio.objects.get_or_create(
+            nombre_completo='OTROS',
+            defaults={'id_usuario': None, 'activo': True}
+        )
+
+        # 9.2 Sincronizamos usuarios existentes que NO sean Backoffice
+        # Esto es útil si ya creaste usuarios antes de implementar el Signal
+        usuarios_aptos = Usuario.objects.exclude(id_rol__codigo='BACKOFFICE')
+
+        for u in usuarios_aptos:
+            GrabadorAudio.objects.get_or_create(
+                id_usuario=u,
+                defaults={'nombre_completo': u.nombre_completo, 'activo': u.activo}
+            )
+
+        self.stdout.write(self.style.SUCCESS('✅ Grabadores (OTROS + Usuarios) verificados/sincronizados.'))
+
 
         # 5. POBLAR ESTADOS DE AUDIO
         estados_audio = [

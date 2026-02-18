@@ -45,17 +45,13 @@ class EstadoAudio(models.Model):
 # ==========================================
 
 class GrabadorAudio(models.Model):
-    id_usuario = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        db_column="id_usuario"
-    )  # ¡Faltaba esta relación!
-    nombre_completo = models.CharField(max_length=200, unique=True)
+    # permitimos null=True para poder crear el registro genérico "OTROS"
+    id_usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
+    nombre_completo = models.CharField(max_length=255)
     activo = models.BooleanField(default=True)
 
     class Meta:
-        db_table = "grabadores_audios"
+        db_table = "grabadores_audio"
 
 
 class Producto(models.Model):

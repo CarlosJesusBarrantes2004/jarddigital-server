@@ -64,12 +64,12 @@ class ProductoViewSet(SoftDeleteModelViewSet):
     search_fields = ['nombre_plan']  # ?search=Max 29.90
 
 
-class GrabadorAudioViewSet(SoftDeleteModelViewSet):
-    # select_related preventivo por si a futuro el frontend pide datos del usuario vinculado
-    queryset = GrabadorAudio.objects.select_related('id_usuario').all()
+class GrabadorAudioViewSet(viewsets.ReadOnlyModelViewSet):
+    # El queryset sigue igual
+    queryset = GrabadorAudio.objects.select_related('id_usuario').all().order_by('id')
     serializer_class = GrabadorAudioSerializer
-    permission_classes = [IsAuthenticated, SoloLecturaOCrearSiEsJefe]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    permission_classes = [IsAuthenticated] # Cualquier usuario logueado puede ver la lista
+    filter_backends = [filters.SearchFilter]
     search_fields = ['nombre_completo']
 
 
