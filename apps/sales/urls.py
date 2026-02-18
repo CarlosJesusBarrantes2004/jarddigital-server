@@ -7,7 +7,8 @@ from .views import (
     SubEstadoSOTViewSet,
     EstadoAudioViewSet,
     ProductoViewSet,
-    GrabadorAudioViewSet
+    GrabadorAudioViewSet,
+    VentaViewSet
 )
 
 # Instanciamos el enrutador automático
@@ -19,6 +20,9 @@ router.register(r'sub-estados-sot', SubEstadoSOTViewSet, basename='sub-estado-so
 router.register(r'estados-audio', EstadoAudioViewSet, basename='estado-audio')
 router.register(r'productos', ProductoViewSet, basename='producto')
 router.register(r'grabadores', GrabadorAudioViewSet, basename='grabador-audio')
+
+# Registramos el endpoint transaccional principal
+router.register(r'ventas', VentaViewSet, basename='venta') # <--- ¡EL ENCHUFE FINAL!
 
 urlpatterns = [
     # Le decimos a Django que incluya todas las URLs generadas por el router

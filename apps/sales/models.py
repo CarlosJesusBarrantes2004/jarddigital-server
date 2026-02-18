@@ -106,7 +106,7 @@ class Venta(models.Model):
     # --- OPERATIVO ---
     codigo_sec = models.CharField(max_length=50, null=True, blank=True)
     codigo_sot = models.CharField(max_length=50, null=True, blank=True)
-    fecha_venta = models.DateTimeField(auto_now_add=True)
+    fecha_venta = models.DateTimeField()
 
     # --- GESTIÓN DE CITAS (FILTROS) ---
     fecha_visita_programada = models.DateField(null=True, blank=True)

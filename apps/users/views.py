@@ -2,9 +2,9 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, filters
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from .serializers import UsuarioSerializer, UsuarioAdminSerializer, RolSistemaSerializer
+from .serializers import UsuarioSerializer, UsuarioAdminSerializer, RolSistemaSerializer, SupervisorAsignacionSerializer
 from .permissions import PuedeGestionarUsuarios, SoloLecturaRolesOCrearDueno
-from .models import Usuario, RolSistema
+from .models import Usuario, RolSistema, SupervisorAsignacion
 from apps.core.mixins import SoftDeleteModelViewSet
 from django.conf import settings
 from django_filters.rest_framework import DjangoFilterBackend
@@ -72,6 +72,30 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
     # 3. BARRA DE BÚSQUEDA (Para el <input type="text"> del frontend)
     # Si el usuario escribe "Juan", Django buscará en todos estos campos a la vez
     search_fields = ['nombre_completo', 'username', 'email']
+
+
+class SupervisorAsignacionViewSet(SoftDeleteModelViewSet):
+    # Optimización Extrema: Traemos toda la cadena de nombres en un solo JOIN de SQL
+    queryset = SupervisorAsignacion.objects.select_related(
+        'id_supervisor',
+        'id_modalidad_sede__id_sucursal',
+        'id_modalidad_sede__id_modalidad'
+    ).all().order_by('-fecha_inicio')
+
+    serializer_class = SupervisorAsignacionSerializer
+    # Usamos el permiso de jefatura que ya tenías para que un asesor no se asigne a sí mismo como jefe
+    permission_classes = [IsAuthenticated, PuedeGestionarUsuarios]
+
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+
+    # Filtros para que RRHH pueda buscar: "?id_supervisor=3" o "?activo=True"
+    filterset_fields = ['id_supervisor', 'id_modalidad_sede', 'activo']
+
+    # Buscador de texto libre para nombres de supervisor o sucursales
+    search_fields = [
+        'id_supervisor__nombre_completo',
+        'id_modalidad_sede__id_sucursal__nombre'
+    ]
 
 
 class LogoutView(APIView):

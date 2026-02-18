@@ -1,7 +1,7 @@
 from django.db import transaction
 from django.contrib.auth.hashers import make_password
 from rest_framework import serializers
-from .models import Usuario, RolSistema, PermisoAcceso
+from .models import Usuario, RolSistema, PermisoAcceso, SupervisorAsignacion
 from apps.core.models import Sucursal, ModalidadSede
 from drf_spectacular.utils import extend_schema_field
 
@@ -137,3 +137,24 @@ class UsuarioAdminSerializer(serializers.ModelSerializer):
                     PermisoAcceso.objects.bulk_create(permisos)
 
         return instance
+
+class SupervisorAsignacionSerializer(serializers.ModelSerializer):
+    # Campos de solo lectura para que la tabla del frontend se pinte sola
+    nombre_supervisor = serializers.CharField(source='id_supervisor.nombre_completo', read_only=True)
+    nombre_sucursal = serializers.CharField(source='id_modalidad_sede.id_sucursal.nombre', read_only=True)
+    nombre_modalidad = serializers.CharField(source='id_modalidad_sede.id_modalidad.nombre', read_only=True)
+
+    class Meta:
+        model = SupervisorAsignacion
+        fields = [
+            'id',
+            'id_modalidad_sede', 'nombre_sucursal', 'nombre_modalidad',
+            'id_supervisor', 'nombre_supervisor',
+            'fecha_inicio', 'fecha_fin', 'activo'
+        ]
+
+    def validate(self, data):
+        # Validación de negocio: La fecha de inicio no puede ser mayor a la de fin
+        if data.get('fecha_fin') and data.get('fecha_inicio') > data.get('fecha_fin'):
+            raise serializers.ValidationError({"fecha_fin": "La fecha de fin no puede ser anterior a la fecha de inicio."})
+        return data
