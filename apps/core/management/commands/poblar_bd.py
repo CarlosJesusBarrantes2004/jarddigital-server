@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from apps.users.models import RolSistema
 from apps.core.models import TipoDocumento, Modalidad, Sucursal
+from apps.ubigeo.models import Departamento, Provincia, Distrito
 # ¡Importamos los nuevos modelos de ventas!
 from apps.sales.models import EstadoAudio, EstadoSOT, SubEstadoSOT, Producto
 
@@ -43,6 +44,15 @@ class Command(BaseCommand):
         for nombre_mod in modalidades:
             Modalidad.objects.get_or_create(nombre=nombre_mod)
         self.stdout.write(self.style.SUCCESS('✅ Modalidades de trabajo verificadas/creadas.'))
+
+        # 3.5. POBLAR GEOGRAFÍA (Lambayeque)
+        dep, _ = Departamento.objects.get_or_create(nombre='Lambayeque')
+        prov, _ = Provincia.objects.get_or_create(nombre='Chiclayo', id_departamento=dep)
+
+        # Creamos el distrito de Chiclayo (que será nuestro ID 1 por defecto)
+        Distrito.objects.get_or_create(nombre='Chiclayo', id_provincia=prov)
+
+        self.stdout.write(self.style.SUCCESS('✅ Geografía inicial (Lambayeque/Chiclayo) verificada/creada.'))
 
         # 4. POBLAR SUCURSALES (Ejemplos iniciales)
         sucursales = [
