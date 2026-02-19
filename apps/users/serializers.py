@@ -86,6 +86,7 @@ class UsuarioAdminSerializer(serializers.ModelSerializer):
             # 2. Hacemos el filtro de activos en Python, ¡cero impacto a Postgres!
             if mod_sede.activo and mod_sede.id_sucursal.activo and mod_sede.id_modalidad.activo:
                 resultado.append({
+                    "id_modalidad_sede": mod_sede.id,
                     "id_sucursal": mod_sede.id_sucursal.id,
                     "nombre_sucursal": mod_sede.id_sucursal.nombre,
                     "id_modalidad": mod_sede.id_modalidad.id,
