@@ -113,7 +113,7 @@ class Venta(models.Model):
     # --- ESTADOS FINALES ---
     fecha_real_inst = models.DateTimeField(null=True, blank=True)
     fecha_rechazo = models.DateTimeField(null=True, blank=True)
-    id_estado_sot = models.ForeignKey(EstadoSOT, on_delete=models.PROTECT, db_column="id_estado_sot")
+    id_estado_sot = models.ForeignKey(EstadoSOT, on_delete=models.PROTECT, db_column="id_estado_sot", null=True, blank=True)
     comentario_gestion = models.TextField(null=True, blank=True)
 
     # --- AUDIOS ---
