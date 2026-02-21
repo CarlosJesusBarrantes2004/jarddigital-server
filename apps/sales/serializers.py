@@ -78,8 +78,38 @@ class VentaSerializer(serializers.ModelSerializer):
             'cliente_email': {'required': True, 'allow_null': False},
             'coordenadas_gps': {'required': True, 'allow_null': False},
             'score_crediticio': {'required': True, 'allow_null': False},
+            'fecha_venta': {'required': False, 'allow_null': True},
             'id_grabador_audios': {'required': True, 'allow_null': False}
         }
+
+
+    def validate(self, data):
+        tipo_doc = data.get('id_tipo_documento', getattr(self.instance, 'id_tipo_documento', None))
+
+        if tipo_doc:
+            # Puedes validar por el ID (ej. 3) o mejor aún, por el código si lo tienes configurado como 'RUC'
+            es_ruc = (tipo_doc.codigo.upper() == 'RUC')
+
+            rep_dni = data.get('representante_legal_dni')
+            rep_nombre = data.get('representante_legal_nombre')
+
+            if es_ruc:
+                errores = {}
+                if not rep_dni:
+                    errores['representante_legal_dni'] = "El DNI del representante es obligatorio cuando es RUC."
+                if not rep_nombre:
+                    errores['representante_legal_nombre'] = "El nombre del representante es obligatorio cuando es RUC."
+
+                if errores:
+                    raise serializers.ValidationError(errores)
+            else:
+                # ¡Medida de seguridad! Si NO es RUC, pero el Frontend mandó datos por accidente,
+                # los forzamos a nulo para no ensuciar la base de datos.
+                data['representante_legal_dni'] = None
+                data['representante_legal_nombre'] = None
+
+        return data
+
 
     def create(self, validated_data):
         # ... (El método create se mantiene IGUAL que la versión anterior) ...
@@ -112,7 +142,7 @@ class VentaSerializer(serializers.ModelSerializer):
             'codigo_sec', 'codigo_sot', 'fecha_visita_programada', 'bloque_horario', 'id_sub_estado_sot',
             'fecha_real_inst', 'fecha_rechazo', 'comentario_gestion',
             'fecha_revision_audios', 'usuario_revision_audios', 'observacion_audios',
-            'audio_subido'
+            'audio_subido', 'fecha_venta'
         ]
         for campo in campos_backoffice:
             validated_data.pop(campo, None)
@@ -122,6 +152,7 @@ class VentaSerializer(serializers.ModelSerializer):
         validated_data['id_estado_audios'] = estado_audio_pendiente
         validated_data['audio_subido'] = False
         validated_data['fecha_subida_audios'] = None
+        validated_data['fecha_venta'] = None
 
         return super().create(validated_data)
 
@@ -172,6 +203,16 @@ class VentaSerializer(serializers.ModelSerializer):
                             {"observacion_audios": "Observación obligatoria al rechazar el audio."})
 
             # =======================================================
+            # 0.5 ESTAMPADO DE FECHA DE VENTA (INDEPENDIENTE)
+            # =======================================================
+            # Si entran códigos SOT/SEC por primera vez, sellamos la fecha
+            if (nuevo_codigo_sot and not instance.codigo_sot) or (
+               nuevo_codigo_sec and not instance.codigo_sec):
+                if not instance.fecha_venta:
+                    validated_data['fecha_venta'] = timezone.now()
+
+
+            # =======================================================
             # 1. AUTOMATIZACIONES DE ESTADO SOT
             # =======================================================
             # Verificamos si la validación anterior de audio modificó el estado
@@ -211,6 +252,8 @@ class VentaSerializer(serializers.ModelSerializer):
                     # Limpiamos el historial de rechazo
                     validated_data['fecha_rechazo'] = None
 
+                    # Reiniciamos el reloj de la venta porque es un nuevo intento operativo
+                    validated_data['fecha_venta'] = timezone.now()
             # =======================================================
             # 4. REGLA: ATENDIDO vs AUDIOS
             # =======================================================

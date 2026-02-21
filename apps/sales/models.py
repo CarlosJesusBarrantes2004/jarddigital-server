@@ -91,9 +91,24 @@ class Venta(models.Model):
     id_distrito_nacimiento = models.ForeignKey(Distrito, on_delete=models.PROTECT, related_name='ventas_nacimiento',
                                                db_column="id_distrito_nacimiento", null=True)
 
+    # NUEVOS CAMPOS DEL CLIENTE (Obligatorios)
+    cliente_papa = models.CharField(max_length=150)
+    cliente_mama = models.CharField(max_length=150)
+    numero_instalacion = models.CharField(max_length=50)
+    cliente_fecha_nacimiento = models.DateTimeField()
+
+    # REPRESENTANTE LEGAL (Opcionales, dependen del RUC)
+    representante_legal_dni = models.CharField(max_length=20, null=True, blank=True,
+                                               help_text="DNI del titular. Solo si es RUC")
+    representante_legal_nombre = models.CharField(max_length=200, null=True, blank=True, help_text="Nombre del titular")
+
+
     # --- UBICACIÓN Y DETALLES ---
     id_distrito_instalacion = models.ForeignKey(Distrito, on_delete=models.PROTECT, related_name='ventas_instalacion',
                                                 db_column="id_distrito_instalacion")
+
+    referencias = models.CharField(max_length=255, null=True, blank=True)  # Opcional
+    plano = models.CharField(max_length=100)  # Obligatorio
     direccion_detalle = models.CharField(max_length=255)
     coordenadas_gps = models.CharField(max_length=100, null=True, blank=True)
     es_full_claro = models.BooleanField(default=False)
@@ -102,7 +117,7 @@ class Venta(models.Model):
     # --- OPERATIVO ---
     codigo_sec = models.CharField(max_length=50, null=True, blank=True)
     codigo_sot = models.CharField(max_length=50, null=True, blank=True)
-    fecha_venta = models.DateTimeField()
+    fecha_venta = models.DateTimeField(null=True, blank=True)
 
     # --- GESTIÓN DE CITAS (FILTROS) ---
     fecha_visita_programada = models.DateField(null=True, blank=True)
