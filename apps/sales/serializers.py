@@ -82,16 +82,17 @@ class VentaSerializer(serializers.ModelSerializer):
             'id_grabador_audios': {'required': True, 'allow_null': False}
         }
 
-
     def validate(self, data):
+        # 1. Obtener el tipo de documento de los datos entrantes o de la instancia (BD).
         tipo_doc = data.get('id_tipo_documento', getattr(self.instance, 'id_tipo_documento', None))
 
         if tipo_doc:
-            # Puedes validar por el ID (ej. 3) o mejor aún, por el código si lo tienes configurado como 'RUC'
-            es_ruc = (tipo_doc.codigo.upper() == 'RUC')
+            es_ruc = (tipo_doc.codigo.upper() == "RUC")  # O tipo_doc.codigo.upper() == 'RUC'
 
-            rep_dni = data.get('representante_legal_dni')
-            rep_nombre = data.get('representante_legal_nombre')
+            # ARREGLO: Buscar en el JSON (data) y si no está, usar lo que ya hay en BD (self.instance)
+            rep_dni = data.get('representante_legal_dni', getattr(self.instance, 'representante_legal_dni', None))
+            rep_nombre = data.get('representante_legal_nombre',
+                                  getattr(self.instance, 'representante_legal_nombre', None))
 
             if es_ruc:
                 errores = {}
@@ -103,10 +104,13 @@ class VentaSerializer(serializers.ModelSerializer):
                 if errores:
                     raise serializers.ValidationError(errores)
             else:
-                # ¡Medida de seguridad! Si NO es RUC, pero el Frontend mandó datos por accidente,
-                # los forzamos a nulo para no ensuciar la base de datos.
-                data['representante_legal_dni'] = None
-                data['representante_legal_nombre'] = None
+                # ARREGLO: Solo forzar a nulo si los campos vienen explícitamente en el JSON
+                # o si es un POST (creación, donde self.instance es None).
+                # Esto evita sobreescribir datos accidentalmente en un PATCH.
+                if not self.instance or 'representante_legal_dni' in data:
+                    data['representante_legal_dni'] = None
+                if not self.instance or 'representante_legal_nombre' in data:
+                    data['representante_legal_nombre'] = None
 
         return data
 
@@ -157,6 +161,14 @@ class VentaSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
+        # =======================================================
+        # 0. CANDADO DE INMUTABILIDAD (REGLA DEL PRODUCT OWNER)
+        # =======================================================
+        if instance.id_estado_sot and instance.id_estado_sot.codigo.upper() == 'RECHAZADO':
+            raise serializers.ValidationError({
+                "error_critico": "Esta venta ha sido RECHAZADA y está cerrada permanentemente. Para corregirla, el asesor debe generar una nueva venta."
+            })
+
         request = self.context.get('request')
         user = request.user
         validated_data['usuario_modificacion'] = user
@@ -174,7 +186,7 @@ class VentaSerializer(serializers.ModelSerializer):
         with transaction.atomic():
 
             # =======================================================
-            # 0. GATILLOS DE AUDIO Y FECHAS (PRIORIDAD ABSOLUTA)
+            # 1. GATILLOS DE AUDIO Y FECHAS (PRIORIDAD ABSOLUTA)
             # =======================================================
             if audio_subido_flag is True and not instance.audio_subido:
                 validated_data['fecha_subida_audios'] = timezone.now()
@@ -187,33 +199,33 @@ class VentaSerializer(serializers.ModelSerializer):
                 # Usamos .upper() para evitar problemas de mayúsculas/minúsculas en BD
                 if nuevo_estado_audio.codigo.upper() == 'RECHAZADO':
 
-                    # 1. FORZAMOS EL ESTADO SOT A RECHAZADO (OVERRIDE)
+                    # FORZAMOS EL ESTADO SOT A RECHAZADO (OVERRIDE)
                     estado_rechazado = EstadoSOT.objects.filter(codigo__iexact='RECHAZADO').first()
                     if estado_rechazado:
                         validated_data['id_estado_sot'] = estado_rechazado
 
-                    # 2. Validaciones obligatorias de rechazo
+                    # Validaciones obligatorias de rechazo
                     if not validated_data.get('fecha_rechazo') and not instance.fecha_rechazo:
                         raise serializers.ValidationError({
-                                                              "fecha_rechazo": "Al rechazar por audio, también debe indicar la fecha de rechazo de la venta."})
+                            "fecha_rechazo": "Al rechazar por audio, también debe indicar la fecha de rechazo de la venta."
+                        })
 
                     observacion = validated_data.get('observacion_audios')
                     if not observacion and not instance.observacion_audios:
                         raise serializers.ValidationError(
-                            {"observacion_audios": "Observación obligatoria al rechazar el audio."})
+                            {"observacion_audios": "Observación obligatoria al rechazar el audio."}
+                        )
 
             # =======================================================
-            # 0.5 ESTAMPADO DE FECHA DE VENTA (INDEPENDIENTE)
+            # 2. ESTAMPADO DE FECHA DE VENTA (INDEPENDIENTE)
             # =======================================================
             # Si entran códigos SOT/SEC por primera vez, sellamos la fecha
-            if (nuevo_codigo_sot and not instance.codigo_sot) or (
-               nuevo_codigo_sec and not instance.codigo_sec):
+            if (nuevo_codigo_sot and not instance.codigo_sot) or (nuevo_codigo_sec and not instance.codigo_sec):
                 if not instance.fecha_venta:
                     validated_data['fecha_venta'] = timezone.now()
 
-
             # =======================================================
-            # 1. AUTOMATIZACIONES DE ESTADO SOT
+            # 3. AUTOMATIZACIONES DE ESTADO SOT
             # =======================================================
             # Verificamos si la validación anterior de audio modificó el estado
             if 'id_estado_sot' not in validated_data:
@@ -231,31 +243,13 @@ class VentaSerializer(serializers.ModelSerializer):
                         validated_data['id_estado_sot'] = estado_ejecucion
 
             # =======================================================
-            # 2. DEFINIR ESTADO DESTINO FINAL PARA VALIDACIONES
+            # 4. DEFINIR ESTADO DESTINO FINAL PARA VALIDACIONES
             # =======================================================
-            estado_destino = validated_data[
-                'id_estado_sot'] if 'id_estado_sot' in validated_data else instance.id_estado_sot
-            estado_audio_destino = validated_data[
-                'id_estado_audios'] if 'id_estado_audios' in validated_data else instance.id_estado_audios
+            estado_destino = validated_data['id_estado_sot'] if 'id_estado_sot' in validated_data else instance.id_estado_sot
+            estado_audio_destino = validated_data['id_estado_audios'] if 'id_estado_audios' in validated_data else instance.id_estado_audios
 
             # =======================================================
-            # 3. REGLA: REVIVIR VENTA (RECHAZADO -> EJECUCION)
-            # =======================================================
-            if estado_sot_antiguo and estado_sot_antiguo.codigo.upper() == 'RECHAZADO':
-                if estado_destino and estado_destino.codigo.upper() == 'EJECUCION':
-                    # ¡NUEVO CANDADO!: Si reviven la venta, exijimos códigos nuevos
-                    if not nuevo_codigo_sec or not nuevo_codigo_sot:
-                        raise serializers.ValidationError({
-                            "codigo_sot": "Para revivir una venta a EJECUCIÓN, es obligatorio enviar el nuevo codigo_sec y codigo_sot."
-                        })
-
-                    # Limpiamos el historial de rechazo
-                    validated_data['fecha_rechazo'] = None
-
-                    # Reiniciamos el reloj de la venta porque es un nuevo intento operativo
-                    validated_data['fecha_venta'] = timezone.now()
-            # =======================================================
-            # 4. REGLA: ATENDIDO vs AUDIOS
+            # 5. REGLA: ATENDIDO vs AUDIOS
             # =======================================================
             if estado_destino and estado_destino.codigo.upper() == 'ATENDIDO':
                 if not estado_audio_destino or estado_audio_destino.codigo.upper() != 'CONFORME':
@@ -264,23 +258,25 @@ class VentaSerializer(serializers.ModelSerializer):
                     })
 
             # =======================================================
-            # 5. VALIDACIÓN DE FECHAS MANUALES SEGÚN DESTINO
+            # 6. VALIDACIÓN DE FECHAS MANUALES SEGÚN DESTINO
             # =======================================================
             if estado_destino:
                 if estado_destino.codigo.upper() == 'RECHAZADO':
                     fecha_rechazo_input = validated_data.get('fecha_rechazo')
                     if not fecha_rechazo_input and not instance.fecha_rechazo:
                         raise serializers.ValidationError(
-                            {"fecha_rechazo": "Debe ingresar la fecha de rechazo manualmente."})
+                            {"fecha_rechazo": "Debe ingresar la fecha de rechazo manualmente."}
+                        )
 
                 elif estado_destino.codigo.upper() == 'ATENDIDO':
                     fecha_inst_input = validated_data.get('fecha_real_inst')
                     if not fecha_inst_input and not instance.fecha_real_inst:
                         raise serializers.ValidationError(
-                            {"fecha_real_inst": "Debe ingresar la fecha real de instalación."})
+                            {"fecha_real_inst": "Debe ingresar la fecha real de instalación."}
+                        )
 
             # =======================================================
-            # 6. VALIDACIÓN SUB-ESTADO
+            # 7. VALIDACIÓN SUB-ESTADO
             # =======================================================
             if nuevo_sub_estado:
                 if not estado_destino or estado_destino.codigo.upper() != 'EJECUCION':
@@ -289,14 +285,14 @@ class VentaSerializer(serializers.ModelSerializer):
                     })
 
             # =======================================================
-            # 7. GUARDADO FINAL
+            # 8. GUARDADO FINAL
             # =======================================================
             for attr, value in validated_data.items():
                 setattr(instance, attr, value)
             instance.save()
 
             # =======================================================
-            # 8. HISTORIAL DE AGENDA
+            # 9. HISTORIAL DE AGENDA
             # =======================================================
             nueva_fecha_visita = validated_data.get('fecha_visita_programada')
             if nueva_fecha_visita and nueva_fecha_visita != fecha_visita_antigua:
