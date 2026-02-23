@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from django.db.models import Q
-from .models import EstadoSOT, SubEstadoSOT, EstadoAudio, Producto, GrabadorAudio, Venta
+from .models import EstadoSOT, SubEstadoSOT, EstadoAudio, Producto, GrabadorAudio, Venta, AudioVenta
 from apps.users.models import SupervisorAsignacion, PermisoAcceso
 from django.db import transaction
 from apps.sales.models import HistorialAgendaSOT
@@ -53,6 +53,18 @@ class GrabadorAudioSerializer(serializers.ModelSerializer):
         fields = ['id', 'id_usuario', 'nombre_completo', 'activo']
 
 
+class AudioVentaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AudioVenta
+        fields = ['id', 'nombre_etiqueta', 'url_audio', 'conforme', 'motivo', 'corregido']
+        extra_kwargs = {
+            'id': {'read_only': False, 'required': False}, # Clave para el PATCH futuro
+            'conforme': {'required': False, 'allow_null': True},
+            'motivo': {'required': False, 'allow_null': True},
+            'corregido': {'read_only': True}
+        }
+
+
 class VentaSerializer(serializers.ModelSerializer):
     # Campos visuales de solo lectura
     nombre_asesor = serializers.CharField(source='id_asesor.nombre_completo', read_only=True)
@@ -61,6 +73,9 @@ class VentaSerializer(serializers.ModelSerializer):
     codigo_estado = serializers.CharField(source="id_estado_sot.codigo", read_only=True)
     nombre_supervisor = serializers.CharField(source='id_supervisor_vigente.id_supervisor.nombre_completo',
                                               read_only=True)
+    # ---> ¡NUEVO CAMPO ANIDADO! <---
+    # El nombre de la variable "audios" DEBE coincidir con el related_name="audios" de tu models.py
+    audios = AudioVentaSerializer(many=True, required=False)
 
     class Meta:
         model = Venta
@@ -88,8 +103,14 @@ class VentaSerializer(serializers.ModelSerializer):
         tipo_doc = data.get('id_tipo_documento', getattr(self.instance, 'id_tipo_documento', None))
 
         if tipo_doc:
-            es_ruc = (tipo_doc.codigo.upper() == "RUC")  # O tipo_doc.codigo.upper() == 'RUC'
+            # Usamos una variable auxiliar para no repetir .codigo.upper() a cada rato
+            codigo_doc = tipo_doc.codigo.upper()
+            es_ruc = (codigo_doc == "RUC")
+            es_dni = (codigo_doc == "DNI")  # Asumiendo que tu código en BD es 'DNI'
 
+            # =======================================================
+            # A. VALIDACIÓN DE REPRESENTANTE LEGAL (Solo RUC)
+            # =======================================================
             # ARREGLO: Buscar en el JSON (data) y si no está, usar lo que ya hay en BD (self.instance)
             rep_dni = data.get('representante_legal_dni', getattr(self.instance, 'representante_legal_dni', None))
             rep_nombre = data.get('representante_legal_nombre',
@@ -107,17 +128,41 @@ class VentaSerializer(serializers.ModelSerializer):
             else:
                 # ARREGLO: Solo forzar a nulo si los campos vienen explícitamente en el JSON
                 # o si es un POST (creación, donde self.instance es None).
-                # Esto evita sobreescribir datos accidentalmente en un PATCH.
                 if not self.instance or 'representante_legal_dni' in data:
                     data['representante_legal_dni'] = None
                 if not self.instance or 'representante_legal_nombre' in data:
                     data['representante_legal_nombre'] = None
 
+            # =======================================================
+            # B. VALIDACIÓN DE CANTIDAD DE AUDIOS (Solo en CREACIÓN/POST)
+            # =======================================================
+            # "if not self.instance" asegura que esto NO se ejecute en el PATCH
+            if not self.instance:
+                # Obtenemos la lista cruda de audios del JSON
+                audios_data = data.get('audios', [])
+                cantidad_audios = len(audios_data)
+
+                # Regla para DNI: 12 Audios
+                if es_dni:
+                    if cantidad_audios != 12:
+                        raise serializers.ValidationError({
+                            "audios": f"Para ventas con DNI, se requieren exactamente 12 audios. Has enviado {cantidad_audios}."
+                        })
+
+                # Regla para RUC: 14 Audios
+                elif es_ruc:
+                    if cantidad_audios != 14:
+                        raise serializers.ValidationError({
+                            "audios": f"Para ventas con RUC, se requieren exactamente 14 audios. Has enviado {cantidad_audios}."
+                        })
+
         return data
 
 
     def create(self, validated_data):
-        # ... (El método create se mantiene IGUAL que la versión anterior) ...
+        # 1. INTERCEPTAMOS LA LISTA DE AUDIOS ANTES DE CREAR LA VENTA
+        audios_data = validated_data.pop('audios', [])
+
         request = self.context.get('request')
         user = request.user
 
@@ -159,7 +204,15 @@ class VentaSerializer(serializers.ModelSerializer):
         validated_data['fecha_subida_audios'] = None
         validated_data['fecha_venta'] = None
 
-        return super().create(validated_data)
+        # 2. CREAMOS LA VENTA PRINCIPAL (El super() ahora no fallará porque ya le quitamos 'audios')
+        venta_creada = super().create(validated_data)
+
+        # 3. GUARDAMOS LOS AUDIOS AMARRADOS A LA VENTA
+        for audio_item in audios_data:
+            # Los audios nacen con conforme=None y motivo=None por defecto
+            AudioVenta.objects.create(id_venta=venta_creada, **audio_item)
+
+        return venta_creada
 
     def update(self, instance, validated_data):
         # =======================================================
@@ -169,6 +222,10 @@ class VentaSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "error_critico": "Esta venta ha sido RECHAZADA y está cerrada permanentemente. Para corregirla, el asesor debe generar una nueva venta."
             })
+
+        # ---> ¡NUEVO: INTERCEPTAR AUDIOS! <---
+        # Usamos None por defecto para saber si enviaron o no la llave "audios" en el PATCH
+        audios_data = validated_data.pop('audios', None)
 
         request = self.context.get('request')
         user = request.user
@@ -291,6 +348,61 @@ class VentaSerializer(serializers.ModelSerializer):
             for attr, value in validated_data.items():
                 setattr(instance, attr, value)
             instance.save()
+
+            # =======================================================
+            # 8.5 EL MONSTRUO: ACTUALIZACIÓN ANIDADA DE AUDIOS
+            # =======================================================
+            if audios_data is not None:
+                # 1. Creamos un diccionario mágico { ID_Audio: Objeto_Audio }
+                # Esto evita hacer 14 consultas a la BD. Hacemos 1 sola y mapeamos.
+                audios_existentes = {audio.id: audio for audio in instance.audios.all()}
+
+                for audio_item in audios_data:
+                    audio_id = audio_item.get('id')
+
+                    if audio_id and audio_id in audios_existentes:
+                        # ---> ESCENARIO A: ACTUALIZAR AUDIO EXISTENTE <---
+                        audio_instance = audios_existentes[audio_id]
+
+                        # -----------------------------------------------------------
+                        # A1. DETECCIÓN DE NUEVA VERSIÓN (ASESOR CORRIGE EL AUDIO)
+                        # -----------------------------------------------------------
+                        nueva_url = audio_item.get('url_audio')
+                        url_anterior = audio_instance.url_audio
+
+                        # Si viene una URL nueva y es distinta a la anterior...
+                        if nueva_url and nueva_url != url_anterior:
+                            audio_instance.url_audio = nueva_url
+                            audio_instance.conforme = None  # Reiniciamos a "Pendiente"
+                            audio_instance.motivo = None  # Limpiamos la queja anterior
+                            audio_instance.corregido = True  # ¡BANDERA ARRIBA! Avisamos a Jadira
+
+                        # -----------------------------------------------------------
+                        # A2. ACTUALIZACIÓN DE ETIQUETA (SI CAMBIÓ)
+                        # -----------------------------------------------------------
+                        audio_instance.nombre_etiqueta = audio_item.get('nombre_etiqueta',
+                                                                        audio_instance.nombre_etiqueta)
+
+                        # -----------------------------------------------------------
+                        # A3. DETECCIÓN DE REVISIÓN (BACKOFFICE RESPONDE)
+                        # -----------------------------------------------------------
+                        # Si viene 'conforme' (True o False), significa que Jadira lo revisó.
+                        if 'conforme' in audio_item:
+                            audio_instance.conforme = audio_item['conforme']
+                            # Al emitir veredicto, la bandera de "aviso" se apaga.
+                            audio_instance.corregido = False
+
+                        if 'motivo' in audio_item:
+                            audio_instance.motivo = audio_item['motivo']
+
+                        audio_instance.save()
+
+                    else:
+                        # ---> ESCENARIO B: CREAR NUEVO AUDIO <---
+                        # Por si el Asesor olvidó un audio en el POST original y lo manda ahora
+                        # (Nota: Nacen con corregido=False por defecto en el modelo)
+                        AudioVenta.objects.create(id_venta=instance, **audio_item)
+
 
             # =======================================================
             # 9. HISTORIAL DE AGENDA

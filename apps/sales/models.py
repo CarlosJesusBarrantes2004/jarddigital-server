@@ -185,5 +185,12 @@ class AudioVenta(models.Model):
     fecha_subida = models.DateTimeField(auto_now_add=True)
     activo = models.BooleanField(default=True)  # ¡Añadido para el borrado lógico!
 
+    # --- NUEVOS CAMPOS QA INTERNO (BACKOFFICE) ---
+    conforme = models.BooleanField(null=True, blank=True)
+    motivo = models.CharField(max_length=255, null=True, blank=True)
+
+    # --- BANDERA PARA AVISAR A BACKOFFICE ---
+    corregido = models.BooleanField(default=False)
+
     class Meta:
         db_table = "audios_venta"
