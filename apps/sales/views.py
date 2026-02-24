@@ -1,9 +1,9 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, filters
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import filters
 from apps.sales.models import Venta
 from apps.sales.serializers import VentaSerializer
 from django_filters.rest_framework import DjangoFilterBackend
+from django.utils import timezone
 
 # Importamos tu papelera de reciclaje y tus aduanas
 from apps.core.mixins import SoftDeleteModelViewSet
@@ -65,12 +65,38 @@ class ProductoViewSet(SoftDeleteModelViewSet):
 
 
 class GrabadorAudioViewSet(viewsets.ReadOnlyModelViewSet):
-    # El queryset sigue igual
+    # El queryset base (trae todos)
     queryset = GrabadorAudio.objects.select_related('id_usuario').all().order_by('id')
     serializer_class = GrabadorAudioSerializer
-    permission_classes = [IsAuthenticated] # Cualquier usuario logueado puede ver la lista
+    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter]
     search_fields = ['nombre_completo']
+
+    def get_queryset(self):
+        # 1. Obtenemos la lista completa inicial
+        queryset = super().get_queryset()
+
+        # 2. Solo aplicamos la lógica de exclusión si estamos LISTANDO (para el dropdown)
+        if self.action == 'list':
+            hoy = timezone.now().date()
+
+            # 3. Buscamos los grabadores que están "Ocupados" hoy.
+            # REGLA: Ocupado = Tiene venta creada HOY y la venta está ACTIVA.
+            # (Esto bloquea Rechazados, Pendientes, etc. Solo libera si activo=False es decir ANULADA)
+            ids_bloqueados = Venta.objects.filter(
+                fecha_creacion__date=hoy,
+                activo=True
+            ).exclude(
+                # REGLA DE ORO: El ID 1 (OTROS) NUNCA entra en la lista negra.
+                # Aunque tenga 1000 ventas activas hoy, lo sacamos de la lista de bloqueados.
+                id_grabador_audios=1
+            ).values_list('id_grabador_audios', flat=True)
+
+            # 4. Excluimos los IDs bloqueados de la respuesta final
+            if ids_bloqueados:
+                queryset = queryset.exclude(id__in=ids_bloqueados)
+
+        return queryset
 
 
 # ==========================================

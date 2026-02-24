@@ -83,7 +83,8 @@ class VentaSerializer(serializers.ModelSerializer):
 
         read_only_fields = [
             'id_asesor', 'id_origen_venta', 'id_supervisor_vigente',
-            'usuario_creacion', 'fecha_creacion', 'usuario_modificacion', 'fecha_modificacion'
+            'usuario_creacion', 'fecha_creacion', 'usuario_modificacion', 'fecha_modificacion',
+            'tipo_venta'
         ]
 
         extra_kwargs = {
@@ -99,6 +100,45 @@ class VentaSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, data):
+        # =======================================================
+        # 0. CANDADOS DE SEGURIDAD Y PERMISOS (ASESOR)
+        # =======================================================
+        if self.instance:  # Solo aplica si es EDICIÓN (PATCH/PUT)
+            request = self.context.get('request')
+            user = request.user
+
+            # Usamos el CÓDIGO del rol para mayor seguridad (Upper por si acaso)
+            es_asesor = (user.id_rol and user.id_rol.codigo.upper() == 'ASESOR')
+
+            if es_asesor:
+                # Obtenemos el código del estado actual (si tiene)
+                estado_actual = self.instance.id_estado_sot.codigo.upper() if self.instance.id_estado_sot else ""
+
+                # --- EXCEPCIÓN: ESTADO 'EJECUCION' (Solo Audios) ---
+                if estado_actual == 'EJECUCION':
+                    # Revisamos qué campos está intentando enviar el Asesor
+                    campos_enviados = set(data.keys())
+
+                    # Si hay algún campo que NO sea 'audios', bloqueamos.
+                    # (Nota: Permitimos 'audios' y nada más)
+                    campos_prohibidos = [campo for campo in campos_enviados if campo != 'audios']
+
+                    if campos_prohibidos:
+                        raise serializers.ValidationError({
+                            "bloqueo_parcial": f"La venta está en EJECUCIÓN. Solo se permite editar los audios. Campos prohibidos detectados: {', '.join(campos_prohibidos)}"
+                        })
+
+                    # Si llegamos aquí, es porque SOLO envió audios.
+                    # IMPORTANTE: No hacemos 'return data' aquí, dejamos que siga el flujo
+                    # para que se ejecute la validación de cantidad de audios (Bloque B) si fuera necesario.
+
+                # --- REGLA GENERAL: LA PAPA CALIENTE ---
+                # Si NO está en ejecución, aplicamos la regla estricta de solicitud_correccion
+                elif not self.instance.solicitud_correccion:
+                    raise serializers.ValidationError({
+                        "bloqueo_total": "No puedes editar esta venta porque está en manos del Backoffice/Operaciones. Espera a que te soliciten una corrección."
+                    })
+
         # 1. Obtener el tipo de documento de los datos entrantes o de la instancia (BD).
         tipo_doc = data.get('id_tipo_documento', getattr(self.instance, 'id_tipo_documento', None))
 
@@ -163,6 +203,17 @@ class VentaSerializer(serializers.ModelSerializer):
         # 1. INTERCEPTAMOS LA LISTA DE AUDIOS ANTES DE CREAR LA VENTA
         audios_data = validated_data.pop('audios', [])
 
+        # -------------------------------------------------------
+        # CÁLCULO AUTOMÁTICO DE TIPO DE VENTA (MASIVO vs CORP)
+        # -------------------------------------------------------
+        tipo_doc = validated_data.get('id_tipo_documento')
+        if tipo_doc:
+            if tipo_doc.codigo.upper() == 'RUC':
+                validated_data['tipo_venta'] = 'CORPORATIVO'
+            else:
+                # Asumimos que DNI, CE, Pasaporte, etc. son MASIVO
+                validated_data['tipo_venta'] = 'MASIVO'
+
         request = self.context.get('request')
         user = request.user
 
@@ -226,6 +277,18 @@ class VentaSerializer(serializers.ModelSerializer):
         # ---> ¡NUEVO: INTERCEPTAR AUDIOS! <---
         # Usamos None por defecto para saber si enviaron o no la llave "audios" en el PATCH
         audios_data = validated_data.pop('audios', None)
+
+        # -------------------------------------------------------
+        # RE-CÁLCULO AUTOMÁTICO SI CAMBIA EL DOCUMENTO
+        # -------------------------------------------------------
+        nuevo_tipo_doc = validated_data.get('id_tipo_documento')
+
+        # Solo recalculamos si están enviando un documento nuevo
+        if nuevo_tipo_doc:
+            if nuevo_tipo_doc.codigo.upper() == 'RUC':
+                validated_data['tipo_venta'] = 'CORPORATIVO'
+            else:
+                validated_data['tipo_venta'] = 'MASIVO'
 
         request = self.context.get('request')
         user = request.user
@@ -307,6 +370,19 @@ class VentaSerializer(serializers.ModelSerializer):
             estado_audio_destino = validated_data['id_estado_audios'] if 'id_estado_audios' in validated_data else instance.id_estado_audios
 
             # =======================================================
+            # 4.5 REGLA: EJECUCIÓN EXIGE CÓDIGOS SOT/SEC
+            # =======================================================
+            if estado_destino and estado_destino.codigo.upper() == 'EJECUCION':
+                # Verificamos si ya los tiene (instance) o si los están mandando ahora (validated_data)
+                tiene_sot = instance.codigo_sot or validated_data.get('codigo_sot')
+                tiene_sec = instance.codigo_sec or validated_data.get('codigo_sec')
+
+                if not tiene_sot or not tiene_sec:
+                    raise serializers.ValidationError({
+                        "codigo_sot": "Para pasar la venta a EJECUCIÓN, es obligatorio registrar el código SOT y el código SEC."
+                    })
+
+            # =======================================================
             # 5. REGLA: ATENDIDO vs AUDIOS
             # =======================================================
             if estado_destino and estado_destino.codigo.upper() == 'ATENDIDO':
@@ -345,6 +421,16 @@ class VentaSerializer(serializers.ModelSerializer):
             # =======================================================
             # 8. GUARDADO FINAL
             # =======================================================
+            # Detectamos quién está guardando
+            es_asesor = (user.id_rol and user.id_rol.codigo == 'ASESOR')
+
+            # Si el ASESOR está guardando cambios...
+            if es_asesor:
+                # 1. Apagamos la solicitud de corrección (La papa vuelve al Backoffice)
+                validated_data['solicitud_correccion'] = False
+                # 2. (Opcional) Limpiamos el comentario del Backoffice para que no confunda
+                validated_data['comentario_gestion'] = None
+
             for attr, value in validated_data.items():
                 setattr(instance, attr, value)
             instance.save()

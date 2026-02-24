@@ -114,6 +114,11 @@ class Venta(models.Model):
     es_full_claro = models.BooleanField(default=False)
     score_crediticio = models.CharField(max_length=50, null=True, blank=True)
 
+    # --- CONTROL DE CORRECCIONES ---
+    # True = El Backoffice te devolvió la venta para que la arregles.
+    # False (Default) = La venta está en manos del Backoffice (Bloqueada para el Asesor).
+    solicitud_correccion = models.BooleanField(default=False)
+
     # --- OPERATIVO ---
     codigo_sec = models.CharField(max_length=50, null=True, blank=True)
     codigo_sot = models.CharField(max_length=50, null=True, blank=True)
@@ -130,6 +135,10 @@ class Venta(models.Model):
     fecha_rechazo = models.DateTimeField(null=True, blank=True)
     id_estado_sot = models.ForeignKey(EstadoSOT, on_delete=models.PROTECT, db_column="id_estado_sot", null=True, blank=True)
     comentario_gestion = models.TextField(null=True, blank=True)
+
+    # --- SEGMENTACIÓN AUTOMÁTICA ---
+    # Se llena solo: DNI -> MASIVO, RUC -> CORPORATIVO
+    tipo_venta = models.CharField(max_length=20, null=True, blank=True)
 
     # --- AUDIOS ---
     id_grabador_audios = models.ForeignKey(GrabadorAudio, on_delete=models.SET_NULL, null=True,
