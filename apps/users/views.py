@@ -52,8 +52,7 @@ class UserMeView(APIView):
 
 # En 4 líneas obtenemos GET, POST, PUT, PATCH y DELETE lógico.
 class UsuarioViewSet(SoftDeleteModelViewSet):
-    # Usamos prefetch_related para traer todos los permisos, sucursales y modalidades
-    # en 2 consultas gigantes en lugar de 100 pequeñitas. ¡Rendimiento puro!
+    # Base del queryset: Optimizamos las consultas para traer toda la info relacionada de una sola vez
     queryset = Usuario.objects.select_related('id_rol').prefetch_related(
         'permisos__id_modalidad_sede__id_sucursal',
         'permisos__id_modalidad_sede__id_modalidad'
@@ -62,16 +61,45 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
     serializer_class = UsuarioAdminSerializer
     permission_classes = [IsAuthenticated, PuedeGestionarUsuarios]
 
-    # 1. Activamos los motores de búsqueda y filtrado de DRF
+    # Activamos búsqueda y filtros
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-
-    # 2. FILTROS EXACTOS (Para los <select> del frontend)
-    # ¿Quieres ver solo a los asesores? ?id_rol=2
     filterset_fields = ['id_rol']
-
-    # 3. BARRA DE BÚSQUEDA (Para el <input type="text"> del frontend)
-    # Si el usuario escribe "Juan", Django buscará en todos estos campos a la vez
     search_fields = ['nombre_completo', 'username', 'email']
+
+    def get_queryset(self):
+        """
+        Sobreescribimos la consulta base para aplicar filtros de seguridad según quién lo pide.
+        """
+        user = self.request.user
+
+        # Obtenemos el queryset base definido arriba (con los select/prefetch ya listos)
+        queryset = super().get_queryset()
+
+        # Verificamos si el usuario tiene un rol asignado
+        if hasattr(user, 'id_rol') and user.id_rol:
+
+            # REGLA DE NEGOCIO:
+            # Si quien consulta es un SUPERVISOR, solo puede ver a los ASESORES
+            # que trabajen en las mismas sedes que él tiene asignadas actualmente.
+            if user.id_rol.codigo == 'SUPERVISOR':
+                # 1. Buscamos las sedes activas de este supervisor
+                # (Tabla: SupervisorAsignacion)
+                sedes_supervisor_ids = user.asignaciones_supervisor.filter(
+                    activo=True,
+                    fecha_fin__isnull=True
+                ).values_list('id_modalidad_sede', flat=True)
+
+                # 2. Filtramos la lista de usuarios:
+                #    - Que su rol sea 'ASESOR'
+                #    - Y que tengan permisos en alguna de las sedes del supervisor
+                queryset = queryset.filter(
+                    id_rol__codigo='ASESOR',
+                    permisos__id_modalidad_sede__in=sedes_supervisor_ids  # CORREGIDO: __in para buscar en la lista
+                ).distinct()
+                # .distinct() es vital: Si un asesor y el supervisor coinciden en 2 sedes,
+                # sin esto el asesor aparecería duplicado en la respuesta.
+
+        return queryset
 
 
 class SupervisorAsignacionViewSet(SoftDeleteModelViewSet):
