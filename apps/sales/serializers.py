@@ -73,6 +73,11 @@ class VentaSerializer(serializers.ModelSerializer):
     codigo_estado = serializers.CharField(source="id_estado_sot.codigo", read_only=True)
     nombre_supervisor = serializers.CharField(source='id_supervisor_vigente.id_supervisor.nombre_completo',
                                               read_only=True)
+
+    # 1. Declaramos los nuevos campos calculados
+    codigo_sec_origen = serializers.SerializerMethodField(read_only=True)
+    codigo_sot_origen = serializers.SerializerMethodField(read_only=True)
+
     # ---> ¡NUEVO CAMPO ANIDADO! <---
     # El nombre de la variable "audios" DEBE coincidir con el related_name="audios" de tu models.py
     audios = AudioVentaSerializer(many=True, required=False)
@@ -96,20 +101,33 @@ class VentaSerializer(serializers.ModelSerializer):
             'coordenadas_gps': {'required': True, 'allow_null': False},
             'score_crediticio': {'required': True, 'allow_null': False},
             'fecha_venta': {'required': False, 'allow_null': True},
-            'id_grabador_audios': {'required': True, 'allow_null': False}
+            'id_grabador_audios': {'required': True, 'allow_null': False},
+
+            # 2. Permitimos que el frontend envíe el ID de la venta origen
+            "venta_origen": {"required": False, "allow_null": True},
         }
 
+        # 3. Métodos para obtener los datos de la venta origen
+        def get_codigo_sec_origen(self, obj):
+            if obj.venta_origen_id:
+                return obj.venta_origen.codigo_sec
+            return None
+
+        def get_codigo_sot_origen(self, obj):
+            if obj.venta_origen_id:
+                return obj.venta_origen.codigo_sot
+            return None
+
     def validate(self, data):
+        # Extraemos el usuario al inicio para usarlo en cualquier validación (Creación o Edición)
+        request = self.context.get('request')
+        user = request.user if request else None
+        es_asesor = (user and hasattr(user, 'id_rol') and user.id_rol and user.id_rol.codigo.upper() == 'ASESOR')
+
         # =======================================================
         # 0. CANDADOS DE SEGURIDAD Y PERMISOS (ASESOR)
         # =======================================================
         if self.instance:  # Solo aplica si es EDICIÓN (PATCH/PUT)
-            request = self.context.get('request')
-            user = request.user
-
-            # Usamos el CÓDIGO del rol para mayor seguridad (Upper por si acaso)
-            es_asesor = (user.id_rol and user.id_rol.codigo.upper() == 'ASESOR')
-
             if es_asesor:
                 # Obtenemos el código del estado actual (si tiene)
                 estado_actual = self.instance.id_estado_sot.codigo.upper() if self.instance.id_estado_sot else ""
@@ -120,17 +138,12 @@ class VentaSerializer(serializers.ModelSerializer):
                     campos_enviados = set(data.keys())
 
                     # Si hay algún campo que NO sea 'audios', bloqueamos.
-                    # (Nota: Permitimos 'audios' y nada más)
                     campos_prohibidos = [campo for campo in campos_enviados if campo != 'audios']
 
                     if campos_prohibidos:
                         raise serializers.ValidationError({
                             "bloqueo_parcial": f"La venta está en EJECUCIÓN. Solo se permite editar los audios. Campos prohibidos detectados: {', '.join(campos_prohibidos)}"
                         })
-
-                    # Si llegamos aquí, es porque SOLO envió audios.
-                    # IMPORTANTE: No hacemos 'return data' aquí, dejamos que siga el flujo
-                    # para que se ejecute la validación de cantidad de audios (Bloque B) si fuera necesario.
 
                 # --- REGLA GENERAL: LA PAPA CALIENTE ---
                 # Si NO está en ejecución, aplicamos la regla estricta de solicitud_correccion
@@ -139,19 +152,31 @@ class VentaSerializer(serializers.ModelSerializer):
                         "bloqueo_total": "No puedes editar esta venta porque está en manos del Backoffice/Operaciones. Espera a que te soliciten una corrección."
                     })
 
-        # 1. Obtener el tipo de documento de los datos entrantes o de la instancia (BD).
+        # =======================================================
+        # C. VALIDACIÓN DE VENTA ORIGEN (Regla de pertenencia)
+        # =======================================================
+        # Extraemos la venta origen si es que la enviaron en el JSON
+        venta_origen = data.get('venta_origen')
+
+        # Si enviaron una venta origen y quien está guardando es un ASESOR...
+        if venta_origen and es_asesor:
+            # Comparamos el ID del asesor de la venta antigua con el usuario actual
+            if venta_origen.id_asesor != user:
+                raise serializers.ValidationError({
+                    "venta_origen": "Acceso denegado: Solo puedes vincular una venta origen que haya sido gestionada por ti."
+                })
+
+        # =======================================================
+        # 1. VALIDACIÓN DE DOCUMENTOS Y REPRESENTANTE LEGAL
+        # =======================================================
         tipo_doc = data.get('id_tipo_documento', getattr(self.instance, 'id_tipo_documento', None))
 
         if tipo_doc:
-            # Usamos una variable auxiliar para no repetir .codigo.upper() a cada rato
             codigo_doc = tipo_doc.codigo.upper()
             es_ruc = (codigo_doc == "RUC")
-            es_dni = (codigo_doc == "DNI")  # Asumiendo que tu código en BD es 'DNI'
+            es_dni = (codigo_doc == "DNI")
 
-            # =======================================================
             # A. VALIDACIÓN DE REPRESENTANTE LEGAL (Solo RUC)
-            # =======================================================
-            # ARREGLO: Buscar en el JSON (data) y si no está, usar lo que ya hay en BD (self.instance)
             rep_dni = data.get('representante_legal_dni', getattr(self.instance, 'representante_legal_dni', None))
             rep_nombre = data.get('representante_legal_nombre',
                                   getattr(self.instance, 'representante_legal_nombre', None))
@@ -166,8 +191,6 @@ class VentaSerializer(serializers.ModelSerializer):
                 if errores:
                     raise serializers.ValidationError(errores)
             else:
-                # ARREGLO: Solo forzar a nulo si los campos vienen explícitamente en el JSON
-                # o si es un POST (creación, donde self.instance es None).
                 if not self.instance or 'representante_legal_dni' in data:
                     data['representante_legal_dni'] = None
                 if not self.instance or 'representante_legal_nombre' in data:
@@ -176,25 +199,19 @@ class VentaSerializer(serializers.ModelSerializer):
             # =======================================================
             # B. VALIDACIÓN DE CANTIDAD DE AUDIOS (Solo en CREACIÓN/POST)
             # =======================================================
-            # "if not self.instance" asegura que esto NO se ejecute en el PATCH
             if not self.instance:
-                # Obtenemos la lista cruda de audios del JSON
                 audios_data = data.get('audios', [])
                 cantidad_audios = len(audios_data)
 
-                # Regla para DNI: 12 Audios
-                if es_dni:
-                    if cantidad_audios != 12:
-                        raise serializers.ValidationError({
-                            "audios": f"Para ventas con DNI, se requieren exactamente 12 audios. Has enviado {cantidad_audios}."
-                        })
+                if es_dni and cantidad_audios != 12:
+                    raise serializers.ValidationError({
+                        "audios": f"Para ventas con DNI, se requieren exactamente 12 audios. Has enviado {cantidad_audios}."
+                    })
 
-                # Regla para RUC: 14 Audios
-                elif es_ruc:
-                    if cantidad_audios != 14:
-                        raise serializers.ValidationError({
-                            "audios": f"Para ventas con RUC, se requieren exactamente 14 audios. Has enviado {cantidad_audios}."
-                        })
+                elif es_ruc and cantidad_audios != 14:
+                    raise serializers.ValidationError({
+                        "audios": f"Para ventas con RUC, se requieren exactamente 14 audios. Has enviado {cantidad_audios}."
+                    })
 
         return data
 

@@ -153,7 +153,8 @@ class VentaViewSet(SoftDeleteModelViewSet):
             'id_estado_sot',
             'id_grabador_audios',
             'id_estado_audios',
-            'usuario_revision_audios'
+            'usuario_revision_audios',
+            'venta_origen'
         ).all()
 
         # ==========================================
