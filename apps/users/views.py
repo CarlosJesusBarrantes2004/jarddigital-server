@@ -68,36 +68,41 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
 
     def get_queryset(self):
         """
-        Sobreescribimos la consulta base para aplicar filtros de seguridad según quién lo pide.
+        Sobreescribimos la consulta base para aplicar filtros de seguridad
+        y filtros dinámicos del frontend.
         """
         user = self.request.user
-
-        # Obtenemos el queryset base definido arriba (con los select/prefetch ya listos)
         queryset = super().get_queryset()
 
-        # Verificamos si el usuario tiene un rol asignado
+        # ==========================================
+        # FASE 1: SEGURIDAD (Row-Level Security)
+        # ==========================================
         if hasattr(user, 'id_rol') and user.id_rol:
 
-            # REGLA DE NEGOCIO:
-            # Si quien consulta es un SUPERVISOR, solo puede ver a los ASESORES
-            # que trabajen en las mismas sedes que él tiene asignadas actualmente.
+            # Si es SUPERVISOR, creamos su "universo cerrado" de datos
             if user.id_rol.codigo == 'SUPERVISOR':
-                # 1. Buscamos las sedes activas de este supervisor
-                # (Tabla: SupervisorAsignacion)
                 sedes_supervisor_ids = user.asignaciones_supervisor.filter(
                     activo=True,
                     fecha_fin__isnull=True
                 ).values_list('id_modalidad_sede', flat=True)
 
-                # 2. Filtramos la lista de usuarios:
-                #    - Que su rol sea 'ASESOR'
-                #    - Y que tengan permisos en alguna de las sedes del supervisor
                 queryset = queryset.filter(
                     id_rol__codigo='ASESOR',
-                    permisos__id_modalidad_sede__in=sedes_supervisor_ids  # CORREGIDO: __in para buscar en la lista
+                    # ¡CORREGIDO: Los dobles guiones bajos son obligatorios!
+                    permisos__id_modalidad_sede__in=sedes_supervisor_ids
                 ).distinct()
-                # .distinct() es vital: Si un asesor y el supervisor coinciden en 2 sedes,
-                # sin esto el asesor aparecería duplicado en la respuesta.
+
+        # ==========================================
+        # FASE 2: FILTRO DINÁMICO DEL FRONTEND
+        # ==========================================
+        # Leemos el parámetro de la URL (ej: /usuarios/?id_modalidad_sede=3)
+        filtro_sede_id = self.request.query_params.get("id_modalidad_sede")
+
+        if filtro_sede_id:
+            # Filtramos el universo de usuarios para mostrar solo los de esa sede
+            queryset = queryset.filter(
+                permisos__id_modalidad_sede=filtro_sede_id
+            ).distinct()
 
         return queryset
 
