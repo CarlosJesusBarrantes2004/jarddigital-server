@@ -55,6 +55,21 @@ class GrabadorAudio(models.Model):
 
 
 class Producto(models.Model):
+    # ==========================================
+    # NUEVOS CAMPOS (Filtros en cascada)
+    # ==========================================
+    # 1. Usamos 'campana' sin 'ñ' para evitar problemas en BD o URLs
+    nombre_campana = models.CharField(max_length=150)
+
+    # 2. Ej: "1 PLAY", "2 PLAY", "3 PLAY"
+    tipo_solucion = models.CharField(max_length=50)
+
+    # 3. Ej: "400 MB CLARO TV ESTANDAR PRO 5000"
+    nombre_paquete = models.CharField(max_length=200)
+
+    # ==========================================
+    # CAMPOS EXISTENTES
+    # ==========================================
     nombre_plan = models.CharField(max_length=100)
     es_alto_valor = models.BooleanField(default=False)
     costo_fijo_plan = models.DecimalField(max_digits=10, decimal_places=2)
@@ -90,6 +105,10 @@ class Venta(models.Model):
     cliente_email = models.EmailField(null=True, blank=True)
     id_distrito_nacimiento = models.ForeignKey(Distrito, on_delete=models.PROTECT, related_name='ventas_nacimiento',
                                                db_column="id_distrito_nacimiento", null=True)
+
+    # --- EQUIPOS ADICIONALES ---
+    cant_decos_adicionales = models.PositiveIntegerField(default=0)
+    cant_repetidores_adicionales = models.PositiveIntegerField(default=0)
 
     # NUEVOS CAMPOS DEL CLIENTE (Obligatorios)
     cliente_papa = models.CharField(max_length=150)

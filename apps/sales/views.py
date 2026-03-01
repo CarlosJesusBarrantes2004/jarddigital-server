@@ -60,7 +60,7 @@ class ProductoViewSet(SoftDeleteModelViewSet):
 
     # Activamos los filtros para que el asesor pueda buscar rápido su plan
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['es_alto_valor']  # ?es_alto_valor=True
+    filterset_fields = ['es_alto_valor', 'nombre_campana', 'tipo_solucion', 'activo']  # ?es_alto_valor=True
     search_fields = ['nombre_plan']  # ?search=Max 29.90
 
 
