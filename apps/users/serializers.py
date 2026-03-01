@@ -5,14 +5,16 @@ from .models import Usuario, RolSistema, PermisoAcceso, SupervisorAsignacion
 from apps.core.models import Sucursal, ModalidadSede
 from drf_spectacular.utils import extend_schema_field
 
+
 class RolSistemaSerializer(serializers.ModelSerializer):
     class Meta:
         model = RolSistema
-        fields = ["id", "codigo", "nombre", "nivel_jerarquia", "activo"]
+        fields = ["id", "codigo", "nombre", "nivel_jerarquia", "descripcion", "activo"]
 
 
 # 1. Creamos la estructura visual para Swagger y el Frontend
 class SucursalModalidadSerializer(serializers.Serializer):
+    id_modalidad_sede = serializers.IntegerField()
     id_sucursal = serializers.IntegerField()
     nombre_sucursal = serializers.CharField()
     id_modalidad = serializers.IntegerField()
@@ -46,13 +48,20 @@ class UsuarioSerializer(serializers.ModelSerializer):
             mod_sede = permiso.id_modalidad_sede
 
             # 2. Hacemos el filtro de activos en Python, ¡cero impacto a Postgres!
-            if mod_sede.activo and mod_sede.id_sucursal.activo and mod_sede.id_modalidad.activo:
-                resultado.append({
-                    "id_sucursal": mod_sede.id_sucursal.id,
-                    "nombre_sucursal": mod_sede.id_sucursal.nombre,
-                    "id_modalidad": mod_sede.id_modalidad.id,
-                    "nombre_modalidad": mod_sede.id_modalidad.nombre
-                })
+            if (
+                mod_sede.activo
+                and mod_sede.id_sucursal.activo
+                and mod_sede.id_modalidad.activo
+            ):
+                resultado.append(
+                    {
+                        "id_modalidad_sede": mod_sede.id,
+                        "id_sucursal": mod_sede.id_sucursal.id,
+                        "nombre_sucursal": mod_sede.id_sucursal.nombre,
+                        "id_modalidad": mod_sede.id_modalidad.id,
+                        "nombre_modalidad": mod_sede.id_modalidad.nombre,
+                    }
+                )
 
         return resultado
 
@@ -69,8 +78,15 @@ class UsuarioAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = Usuario
         fields = [
-            'id', 'username', 'password', 'nombre_completo', 'email',
-            'id_rol', 'activo', 'ids_modalidades_sede', 'sucursales'  # <- Añadido aquí
+            "id",
+            "username",
+            "password",
+            "nombre_completo",
+            "email",
+            "id_rol",
+            "activo",
+            "ids_modalidades_sede",
+            "sucursales",  # <- Añadido aquí
         ]
 
     # 2. Reutilizamos la lógica que ya teníamos (Asegúrate de tener importado SucursalModalidadSerializer)
@@ -84,21 +100,26 @@ class UsuarioAdminSerializer(serializers.ModelSerializer):
             mod_sede = permiso.id_modalidad_sede
 
             # 2. Hacemos el filtro de activos en Python, ¡cero impacto a Postgres!
-            if mod_sede.activo and mod_sede.id_sucursal.activo and mod_sede.id_modalidad.activo:
-                resultado.append({
-                    "id_modalidad_sede": mod_sede.id,
-                    "id_sucursal": mod_sede.id_sucursal.id,
-                    "nombre_sucursal": mod_sede.id_sucursal.nombre,
-                    "id_modalidad": mod_sede.id_modalidad.id,
-                    "nombre_modalidad": mod_sede.id_modalidad.nombre
-                })
+            if (
+                mod_sede.activo
+                and mod_sede.id_sucursal.activo
+                and mod_sede.id_modalidad.activo
+            ):
+                resultado.append(
+                    {
+                        "id_modalidad_sede": mod_sede.id,
+                        "id_sucursal": mod_sede.id_sucursal.id,
+                        "nombre_sucursal": mod_sede.id_sucursal.nombre,
+                        "id_modalidad": mod_sede.id_modalidad.id,
+                        "nombre_modalidad": mod_sede.id_modalidad.nombre,
+                    }
+                )
 
         return resultado
 
-
     def create(self, validated_data):
-        ids_sedes = validated_data.pop('ids_modalidades_sede', [])
-        password = validated_data.pop('password', None)
+        ids_sedes = validated_data.pop("ids_modalidades_sede", [])
+        password = validated_data.pop("password", None)
 
         with transaction.atomic():
             usuario = Usuario(**validated_data)
@@ -106,7 +127,10 @@ class UsuarioAdminSerializer(serializers.ModelSerializer):
                 usuario.set_password(password)
             usuario.save()
 
-            permisos = [PermisoAcceso(id_usuario=usuario, id_modalidad_sede_id=mod_id) for mod_id in ids_sedes]
+            permisos = [
+                PermisoAcceso(id_usuario=usuario, id_modalidad_sede_id=mod_id)
+                for mod_id in ids_sedes
+            ]
             if permisos:
                 PermisoAcceso.objects.bulk_create(permisos)
 
@@ -114,8 +138,8 @@ class UsuarioAdminSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         # 1. Extraemos los campos especiales
-        ids_sedes = validated_data.pop('ids_modalidades_sede', None)
-        password = validated_data.pop('password', None)
+        ids_sedes = validated_data.pop("ids_modalidades_sede", None)
+        password = validated_data.pop("password", None)
 
         with transaction.atomic():
             # 2. Actualizamos datos básicos (nombre, email, rol, etc.)
@@ -133,29 +157,48 @@ class UsuarioAdminSerializer(serializers.ModelSerializer):
                 # Borramos los permisos viejos
                 PermisoAcceso.objects.filter(id_usuario=instance).delete()
                 # Creamos los nuevos
-                permisos = [PermisoAcceso(id_usuario=instance, id_modalidad_sede_id=mod_id) for mod_id in ids_sedes]
+                permisos = [
+                    PermisoAcceso(id_usuario=instance, id_modalidad_sede_id=mod_id)
+                    for mod_id in ids_sedes
+                ]
                 if permisos:
                     PermisoAcceso.objects.bulk_create(permisos)
 
         return instance
 
+
 class SupervisorAsignacionSerializer(serializers.ModelSerializer):
     # Campos de solo lectura para que la tabla del frontend se pinte sola
-    nombre_supervisor = serializers.CharField(source='id_supervisor.nombre_completo', read_only=True)
-    nombre_sucursal = serializers.CharField(source='id_modalidad_sede.id_sucursal.nombre', read_only=True)
-    nombre_modalidad = serializers.CharField(source='id_modalidad_sede.id_modalidad.nombre', read_only=True)
+    nombre_supervisor = serializers.CharField(
+        source="id_supervisor.nombre_completo", read_only=True
+    )
+    nombre_sucursal = serializers.CharField(
+        source="id_modalidad_sede.id_sucursal.nombre", read_only=True
+    )
+    nombre_modalidad = serializers.CharField(
+        source="id_modalidad_sede.id_modalidad.nombre", read_only=True
+    )
 
     class Meta:
         model = SupervisorAsignacion
         fields = [
-            'id',
-            'id_modalidad_sede', 'nombre_sucursal', 'nombre_modalidad',
-            'id_supervisor', 'nombre_supervisor',
-            'fecha_inicio', 'fecha_fin', 'activo'
+            "id",
+            "id_modalidad_sede",
+            "nombre_sucursal",
+            "nombre_modalidad",
+            "id_supervisor",
+            "nombre_supervisor",
+            "fecha_inicio",
+            "fecha_fin",
+            "activo",
         ]
 
     def validate(self, data):
         # Validación de negocio: La fecha de inicio no puede ser mayor a la de fin
-        if data.get('fecha_fin') and data.get('fecha_inicio') > data.get('fecha_fin'):
-            raise serializers.ValidationError({"fecha_fin": "La fecha de fin no puede ser anterior a la fecha de inicio."})
+        if data.get("fecha_fin") and data.get("fecha_inicio") > data.get("fecha_fin"):
+            raise serializers.ValidationError(
+                {
+                    "fecha_fin": "La fecha de fin no puede ser anterior a la fecha de inicio."
+                }
+            )
         return data

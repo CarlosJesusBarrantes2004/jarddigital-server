@@ -29,7 +29,7 @@ class Command(BaseCommand):
             username=admin_username,
             defaults={
                 "email": "admin@jarddigital.com",
-                "nombre_completo": "Carlos Barrantes",
+                "nombre_completo": "Renato Manay",
                 "id_rol": rol_dueno,
                 "is_staff": True,
                 "is_superuser": True,

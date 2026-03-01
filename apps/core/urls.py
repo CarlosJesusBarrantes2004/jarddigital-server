@@ -1,14 +1,23 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import SucursalViewSet, ModalidadViewSet, TipoDocumentoViewSet, ModalidadSedeOpcionesViewSet
+from .views import (
+    SucursalViewSet,
+    ModalidadViewSet,
+    TipoDocumentoViewSet,
+    ModalidadSedeOpcionesViewSet,
+)
 
 # El Router crea automáticamente todas las rutas CRUD
 router = DefaultRouter()
-router.register(r'sucursales', SucursalViewSet, basename='sucursal')
-router.register(r'modalidades', ModalidadViewSet, basename='modalidad')
-router.register(r'tipos-documento', TipoDocumentoViewSet, basename='tipo-documento')
-router.register(r'sucursales-modalidades', ModalidadSedeOpcionesViewSet, basename='sucursal-modalidad')
+router.register(r"sucursales", SucursalViewSet, basename="sucursal")
+router.register(r"modalidades", ModalidadViewSet, basename="modalidad")
+router.register(r"tipos-documento", TipoDocumentoViewSet, basename="tipo-documento")
+router.register(
+    r"sucursales-modalidades",
+    ModalidadSedeOpcionesViewSet,
+    basename="sucursal-modalidad",
+)
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path("", include(router.urls)),
 ]

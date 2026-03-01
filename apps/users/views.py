@@ -2,7 +2,12 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, filters
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from .serializers import UsuarioSerializer, UsuarioAdminSerializer, RolSistemaSerializer, SupervisorAsignacionSerializer
+from .serializers import (
+    UsuarioSerializer,
+    UsuarioAdminSerializer,
+    RolSistemaSerializer,
+    SupervisorAsignacionSerializer,
+)
 from .permissions import PuedeGestionarUsuarios, SoloLecturaRolesOCrearDueno
 from .models import Usuario, RolSistema, SupervisorAsignacion
 from apps.core.mixins import SoftDeleteModelViewSet
@@ -35,11 +40,14 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
         return response
 
+
 class RolSistemaViewSet(SoftDeleteModelViewSet):
     """CRUD de los roles del sistema (Dueño, Supervisor, Asesor)"""
+
     queryset = RolSistema.objects.all()
     serializer_class = RolSistemaSerializer
     permission_classes = [IsAuthenticated, SoloLecturaRolesOCrearDueno]
+
 
 class UserMeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -53,18 +61,22 @@ class UserMeView(APIView):
 # En 4 líneas obtenemos GET, POST, PUT, PATCH y DELETE lógico.
 class UsuarioViewSet(SoftDeleteModelViewSet):
     # Base del queryset: Optimizamos las consultas para traer toda la info relacionada de una sola vez
-    queryset = Usuario.objects.select_related('id_rol').prefetch_related(
-        'permisos__id_modalidad_sede__id_sucursal',
-        'permisos__id_modalidad_sede__id_modalidad'
-    ).all()
+    queryset = (
+        Usuario.objects.select_related("id_rol")
+        .prefetch_related(
+            "permisos__id_modalidad_sede__id_sucursal",
+            "permisos__id_modalidad_sede__id_modalidad",
+        )
+        .all()
+    )
 
     serializer_class = UsuarioAdminSerializer
     permission_classes = [IsAuthenticated, PuedeGestionarUsuarios]
 
     # Activamos búsqueda y filtros
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['id_rol']
-    search_fields = ['nombre_completo', 'username', 'email']
+    filterset_fields = ["id_rol"]
+    search_fields = ["nombre_completo", "username", "email"]
 
     def get_queryset(self):
         """
@@ -76,39 +88,47 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
         queryset = super().get_queryset()
 
         # Verificamos si el usuario tiene un rol asignado
-        if hasattr(user, 'id_rol') and user.id_rol:
+        if hasattr(user, "id_rol") and user.id_rol:
 
             # REGLA DE NEGOCIO:
             # Si quien consulta es un SUPERVISOR, solo puede ver a los ASESORES
             # que trabajen en las mismas sedes que él tiene asignadas actualmente.
-            if user.id_rol.codigo == 'SUPERVISOR':
+            if user.id_rol.codigo == "SUPERVISOR":
                 # 1. Buscamos las sedes activas de este supervisor
-                # (Tabla: SupervisorAsignacion)
                 sedes_supervisor_ids = user.asignaciones_supervisor.filter(
-                    activo=True,
-                    fecha_fin__isnull=True
-                ).values_list('id_modalidad_sede', flat=True)
+                    activo=True, fecha_fin__isnull=True
+                ).values_list("id_modalidad_sede", flat=True)
 
-                # 2. Filtramos la lista de usuarios:
-                #    - Que su rol sea 'ASESOR'
-                #    - Y que tengan permisos en alguna de las sedes del supervisor
+                # 2. Filtramos la lista de usuarios
                 queryset = queryset.filter(
-                    id_rol__codigo='ASESOR',
-                    permisos__id_modalidad_sede__in=sedes_supervisor_ids  # CORREGIDO: __in para buscar en la lista
+                    id_rol__codigo="ASESOR",
+                    permisos__id_modalidad_sede__in=sedes_supervisor_ids,
                 ).distinct()
-                # .distinct() es vital: Si un asesor y el supervisor coinciden en 2 sedes,
-                # sin esto el asesor aparecería duplicado en la respuesta.
+
+        # --- AQUÍ ESTÁ LA MAGIA QUE FALTABA ---
+        # 3. Leemos el filtro dinámico que envía el Sidebar del frontend (?id_modalidad_sede=X)
+        filtro_sede_id = self.request.query_params.get("id_modalidad_sede")
+
+        if filtro_sede_id:
+            # Si el frontend pide una sede específica, filtramos aún más los resultados
+            queryset = queryset.filter(
+                permisos__id_modalidad_sede=filtro_sede_id
+            ).distinct()
 
         return queryset
 
 
 class SupervisorAsignacionViewSet(SoftDeleteModelViewSet):
     # Optimización Extrema: Traemos toda la cadena de nombres en un solo JOIN de SQL
-    queryset = SupervisorAsignacion.objects.select_related(
-        'id_supervisor',
-        'id_modalidad_sede__id_sucursal',
-        'id_modalidad_sede__id_modalidad'
-    ).all().order_by('-fecha_inicio')
+    queryset = (
+        SupervisorAsignacion.objects.select_related(
+            "id_supervisor",
+            "id_modalidad_sede__id_sucursal",
+            "id_modalidad_sede__id_modalidad",
+        )
+        .all()
+        .order_by("-fecha_inicio")
+    )
 
     serializer_class = SupervisorAsignacionSerializer
     # Usamos el permiso de jefatura que ya tenías para que un asesor no se asigne a sí mismo como jefe
@@ -117,12 +137,12 @@ class SupervisorAsignacionViewSet(SoftDeleteModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
 
     # Filtros para que RRHH pueda buscar: "?id_supervisor=3" o "?activo=True"
-    filterset_fields = ['id_supervisor', 'id_modalidad_sede', 'activo']
+    filterset_fields = ["id_supervisor", "id_modalidad_sede", "activo"]
 
     # Buscador de texto libre para nombres de supervisor o sucursales
     search_fields = [
-        'id_supervisor__nombre_completo',
-        'id_modalidad_sede__id_sucursal__nombre'
+        "id_supervisor__nombre_completo",
+        "id_modalidad_sede__id_sucursal__nombre",
     ]
 
 
@@ -136,12 +156,14 @@ class LogoutView(APIView):
         request=None,  # Le decimos que no necesitamos que envíen ningún JSON en el body
         responses={
             200: inline_serializer(
-                name='LogoutResponse',
+                name="LogoutResponse",
                 fields={
-                    'detail': serializers.CharField(default='Sesión cerrada correctamente')
-                }
+                    "detail": serializers.CharField(
+                        default="Sesión cerrada correctamente"
+                    )
+                },
             )
-        }
+        },
     )
     def post(self, request):
         response = Response({"detail": "Sesión cerrada correctamente"}, status=200)
