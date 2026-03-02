@@ -107,16 +107,16 @@ class VentaSerializer(serializers.ModelSerializer):
             "venta_origen": {"required": False, "allow_null": True},
         }
 
-        # 3. Métodos para obtener los datos de la venta origen
-        def get_codigo_sec_origen(self, obj):
-            if obj.venta_origen_id:
-                return obj.venta_origen.codigo_sec
-            return None
+    # 3. Métodos para obtener los datos de la venta origen
+    def get_codigo_sec_origen(self, obj):
+        if obj.venta_origen_id:
+            return obj.venta_origen.codigo_sec
+        return None
 
-        def get_codigo_sot_origen(self, obj):
-            if obj.venta_origen_id:
-                return obj.venta_origen.codigo_sot
-            return None
+    def get_codigo_sot_origen(self, obj):
+        if obj.venta_origen_id:
+            return obj.venta_origen.codigo_sot
+        return None
 
     def validate(self, data):
         # Extraemos el usuario al inicio para usarlo en cualquier validación (Creación o Edición)

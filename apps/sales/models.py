@@ -95,6 +95,16 @@ class Venta(models.Model):
     id_supervisor_vigente = models.ForeignKey(SupervisorAsignacion, on_delete=models.PROTECT,
                                               db_column="id_supervisor_vigente")
 
+    # NUEVO CAMPO: Apunta a otra Venta (por eso usamos 'self')
+    venta_origen = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ventas_derivadas',
+        db_column='venta_origen'
+    )
+
     # --- PRODUCTO & CLIENTE ---
     id_producto = models.ForeignKey(Producto, on_delete=models.PROTECT, db_column="id_producto")
     tecnologia = models.CharField(max_length=20)
