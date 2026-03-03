@@ -8,6 +8,7 @@ from apps.ubigeo.models import Distrito
 # 1. CATÁLOGOS Y ESTADOS
 # ==========================================
 
+
 class EstadoSOT(models.Model):
     codigo = models.CharField(max_length=20, unique=True)
     nombre = models.CharField(max_length=100)
@@ -44,9 +45,12 @@ class EstadoAudio(models.Model):
 # 2. OPERATIVOS Y PRODUCTOS
 # ==========================================
 
+
 class GrabadorAudio(models.Model):
     # permitimos null=True para poder crear el registro genérico "OTROS"
-    id_usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
+    id_usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True
+    )
     nombre_completo = models.CharField(max_length=255)
     activo = models.BooleanField(default=True)
 
@@ -86,25 +90,43 @@ class Producto(models.Model):
 # 3. LA BESTIA: VENTAS (CORE)
 # ==========================================
 
+
 class Venta(models.Model):
     # --- VINCULACIÓN ---
     id_asesor = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="ventas_asesor", db_column="id_asesor"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="ventas_asesor",
+        db_column="id_asesor",
     )
-    id_origen_venta = models.ForeignKey(ModalidadSede, on_delete=models.PROTECT, db_column="id_origen_venta")
-    id_supervisor_vigente = models.ForeignKey(SupervisorAsignacion, on_delete=models.PROTECT,
-                                              db_column="id_supervisor_vigente")
+    id_origen_venta = models.ForeignKey(
+        ModalidadSede, on_delete=models.PROTECT, db_column="id_origen_venta"
+    )
+    id_supervisor_vigente = models.ForeignKey(
+        SupervisorAsignacion,
+        on_delete=models.PROTECT,
+        db_column="id_supervisor_vigente",
+    )
 
     # --- PRODUCTO & CLIENTE ---
-    id_producto = models.ForeignKey(Producto, on_delete=models.PROTECT, db_column="id_producto")
+    id_producto = models.ForeignKey(
+        Producto, on_delete=models.PROTECT, db_column="id_producto"
+    )
     tecnologia = models.CharField(max_length=20)
-    id_tipo_documento = models.ForeignKey(TipoDocumento, on_delete=models.PROTECT, db_column="id_tipo_documento")
+    id_tipo_documento = models.ForeignKey(
+        TipoDocumento, on_delete=models.PROTECT, db_column="id_tipo_documento"
+    )
     cliente_numero_doc = models.CharField(max_length=20)
     cliente_nombre = models.CharField(max_length=200)
     cliente_telefono = models.CharField(max_length=20)
     cliente_email = models.EmailField(null=True, blank=True)
-    id_distrito_nacimiento = models.ForeignKey(Distrito, on_delete=models.PROTECT, related_name='ventas_nacimiento',
-                                               db_column="id_distrito_nacimiento", null=True)
+    id_distrito_nacimiento = models.ForeignKey(
+        Distrito,
+        on_delete=models.PROTECT,
+        related_name="ventas_nacimiento",
+        db_column="id_distrito_nacimiento",
+        null=True,
+    )
 
     # --- EQUIPOS ADICIONALES ---
     cant_decos_adicionales = models.PositiveIntegerField(default=0)
@@ -117,14 +139,23 @@ class Venta(models.Model):
     cliente_fecha_nacimiento = models.DateTimeField()
 
     # REPRESENTANTE LEGAL (Opcionales, dependen del RUC)
-    representante_legal_dni = models.CharField(max_length=20, null=True, blank=True,
-                                               help_text="DNI del titular. Solo si es RUC")
-    representante_legal_nombre = models.CharField(max_length=200, null=True, blank=True, help_text="Nombre del titular")
-
+    representante_legal_dni = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        help_text="DNI del titular. Solo si es RUC",
+    )
+    representante_legal_nombre = models.CharField(
+        max_length=200, null=True, blank=True, help_text="Nombre del titular"
+    )
 
     # --- UBICACIÓN Y DETALLES ---
-    id_distrito_instalacion = models.ForeignKey(Distrito, on_delete=models.PROTECT, related_name='ventas_instalacion',
-                                                db_column="id_distrito_instalacion")
+    id_distrito_instalacion = models.ForeignKey(
+        Distrito,
+        on_delete=models.PROTECT,
+        related_name="ventas_instalacion",
+        db_column="id_distrito_instalacion",
+    )
 
     referencias = models.CharField(max_length=255, null=True, blank=True)  # Opcional
     plano = models.CharField(max_length=100)  # Obligatorio
@@ -146,13 +177,23 @@ class Venta(models.Model):
     # --- GESTIÓN DE CITAS (FILTROS) ---
     fecha_visita_programada = models.DateField(null=True, blank=True)
     bloque_horario = models.CharField(max_length=50, null=True, blank=True)
-    id_sub_estado_sot = models.ForeignKey(SubEstadoSOT, on_delete=models.SET_NULL, null=True,
-                                          db_column="id_sub_estado_sot")
+    id_sub_estado_sot = models.ForeignKey(
+        SubEstadoSOT,
+        on_delete=models.SET_NULL,
+        null=True,
+        db_column="id_sub_estado_sot",
+    )
 
     # --- ESTADOS FINALES ---
     fecha_real_inst = models.DateTimeField(null=True, blank=True)
     fecha_rechazo = models.DateTimeField(null=True, blank=True)
-    id_estado_sot = models.ForeignKey(EstadoSOT, on_delete=models.PROTECT, db_column="id_estado_sot", null=True, blank=True)
+    id_estado_sot = models.ForeignKey(
+        EstadoSOT,
+        on_delete=models.PROTECT,
+        db_column="id_estado_sot",
+        null=True,
+        blank=True,
+    )
     comentario_gestion = models.TextField(null=True, blank=True)
 
     # --- SEGMENTACIÓN AUTOMÁTICA ---
@@ -160,31 +201,64 @@ class Venta(models.Model):
     tipo_venta = models.CharField(max_length=20, null=True, blank=True)
 
     # --- AUDIOS ---
-    id_grabador_audios = models.ForeignKey(GrabadorAudio, on_delete=models.SET_NULL, null=True,
-                                           db_column="id_grabador_audios")
+    id_grabador_audios = models.ForeignKey(
+        GrabadorAudio,
+        on_delete=models.SET_NULL,
+        null=True,
+        db_column="id_grabador_audios",
+    )
     audio_subido = models.BooleanField(default=False)
     fecha_subida_audios = models.DateTimeField(null=True, blank=True)
 
-    id_estado_audios = models.ForeignKey(EstadoAudio, on_delete=models.SET_NULL, null=True,
-                                         db_column="id_estado_audios")
+    id_estado_audios = models.ForeignKey(
+        EstadoAudio, on_delete=models.SET_NULL, null=True, db_column="id_estado_audios"
+    )
     fecha_revision_audios = models.DateTimeField(null=True, blank=True)
-    usuario_revision_audios = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
-                                                related_name="audios_revisados", db_column="usuario_revision_audios")
+    usuario_revision_audios = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="audios_revisados",
+        db_column="usuario_revision_audios",
+    )
     observacion_audios = models.TextField(null=True, blank=True)
 
     # --- AUDITORÍA Y BORRADO LÓGICO ---
-    usuario_creacion = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
-                                         related_name="ventas_creadas", db_column="usuario_creacion")
+    usuario_creacion = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="ventas_creadas",
+        db_column="usuario_creacion",
+    )
     fecha_creacion = models.DateTimeField(auto_now_add=True)
-    usuario_modificacion = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
-                                             related_name="ventas_modificadas", db_column="usuario_modificacion")
+    usuario_modificacion = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="ventas_modificadas",
+        db_column="usuario_modificacion",
+    )
     fecha_modificacion = models.DateTimeField(auto_now=True)
     activo = models.BooleanField(default=True)  # ¡Salvavidas añadido!
+
+    # --- REINGRESO DE VENTAS ---
+    # Relación a sí mismo para saber de qué venta antigua proviene (si es un reingreso)
+    venta_origen = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reingresos",
+        db_column="venta_origen",
+    )
 
     class Meta:
         db_table = "ventas"
         indexes = [
-            models.Index(fields=['fecha_visita_programada', 'id_sub_estado_sot'], name='idx_filtro_agenda'),
+            models.Index(
+                fields=["fecha_visita_programada", "id_sub_estado_sot"],
+                name="idx_filtro_agenda",
+            ),
         ]
 
 
@@ -192,14 +266,25 @@ class Venta(models.Model):
 # 4. RASTREO Y ARCHIVOS
 # ==========================================
 
+
 class HistorialAgendaSOT(models.Model):
     # ¡Tabla nueva del DBML!
-    id_venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name="historial_agenda", db_column="id_venta")
+    id_venta = models.ForeignKey(
+        Venta,
+        on_delete=models.CASCADE,
+        related_name="historial_agenda",
+        db_column="id_venta",
+    )
     fecha_anterior = models.DateField(null=True, blank=True)
     fecha_nueva = models.DateField()
-    id_sub_estado_motivo = models.ForeignKey(SubEstadoSOT, on_delete=models.PROTECT, db_column="id_sub_estado_motivo")
-    usuario_responsable = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
-                                            db_column="usuario_responsable")
+    id_sub_estado_motivo = models.ForeignKey(
+        SubEstadoSOT, on_delete=models.PROTECT, db_column="id_sub_estado_motivo"
+    )
+    usuario_responsable = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        db_column="usuario_responsable",
+    )
     creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -207,7 +292,9 @@ class HistorialAgendaSOT(models.Model):
 
 
 class AudioVenta(models.Model):
-    id_venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name="audios", db_column="id_venta")
+    id_venta = models.ForeignKey(
+        Venta, on_delete=models.CASCADE, related_name="audios", db_column="id_venta"
+    )
     nombre_etiqueta = models.CharField(max_length=100)
     url_audio = models.CharField(max_length=255)
     fecha_subida = models.DateTimeField(auto_now_add=True)
