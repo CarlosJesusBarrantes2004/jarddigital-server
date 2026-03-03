@@ -108,6 +108,16 @@ class Venta(models.Model):
         db_column="id_supervisor_vigente",
     )
 
+    # NUEVO CAMPO: Apunta a otra Venta (por eso usamos 'self')
+    venta_origen = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ventas_derivadas",
+        db_column="venta_origen",
+    )
+
     # --- PRODUCTO & CLIENTE ---
     id_producto = models.ForeignKey(
         Producto, on_delete=models.PROTECT, db_column="id_producto"
@@ -240,17 +250,6 @@ class Venta(models.Model):
     )
     fecha_modificacion = models.DateTimeField(auto_now=True)
     activo = models.BooleanField(default=True)  # ¡Salvavidas añadido!
-
-    # --- REINGRESO DE VENTAS ---
-    # Relación a sí mismo para saber de qué venta antigua proviene (si es un reingreso)
-    venta_origen = models.ForeignKey(
-        "self",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="reingresos",
-        db_column="venta_origen",
-    )
 
     class Meta:
         db_table = "ventas"

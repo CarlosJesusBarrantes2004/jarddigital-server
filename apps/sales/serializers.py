@@ -132,8 +132,7 @@ class VentaSerializer(serializers.ModelSerializer):
             "venta_origen": {"required": False, "allow_null": True},
         }
 
-        # 3. Métodos para obtener los datos de la venta origen
-
+    # 3. Métodos para obtener los datos de la venta origen
     def get_codigo_sec_origen(self, obj):
         if obj.venta_origen_id:
             return obj.venta_origen.codigo_sec
