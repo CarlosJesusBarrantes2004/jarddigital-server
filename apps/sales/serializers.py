@@ -96,6 +96,10 @@ class VentaSerializer(serializers.ModelSerializer):
         source="id_supervisor_vigente.id_supervisor.nombre_completo", read_only=True
     )
 
+    codigo_tipo_documento = serializers.CharField(
+        source="id_tipo_documento.codigo", read_only=True
+    )
+
     # 1. Declaramos los nuevos campos calculados
     codigo_sec_origen = serializers.SerializerMethodField(read_only=True)
     codigo_sot_origen = serializers.SerializerMethodField(read_only=True)
