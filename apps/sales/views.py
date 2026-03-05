@@ -8,6 +8,7 @@ from django.utils import timezone
 # Importamos tu papelera de reciclaje y tus aduanas
 from apps.core.mixins import SoftDeleteModelViewSet
 from apps.users.permissions import SoloLecturaOCrearSiEsJefe
+from apps.users.models import PermisoAcceso
 
 from .models import EstadoSOT, SubEstadoSOT, EstadoAudio, Producto, GrabadorAudio
 from .serializers import (
@@ -163,12 +164,15 @@ class VentaViewSet(SoftDeleteModelViewSet):
         # Verificamos qué tipo de usuario está pidiendo los datos
         if hasattr(user, 'id_rol') and user.id_rol:
 
-            # Si es un ASESOR, le ponemos un candado: Solo ve sus propias ventas
-            if user.id_rol.codigo == 'ASESOR':
+            # Convertimos a mayúsculas por seguridad (ej. evita fallos si alguien escribe "Asesor")
+            codigo_rol = user.id_rol.codigo.upper()
+
+            # Candado ASESOR: Solo ve sus propias ventas
+            if codigo_rol == 'ASESOR':
                 queryset = queryset.filter(id_asesor=user)
 
-            # Si es SUPERVISOR, solo ve las ventas de sus sedes asignadas
-            elif user.id_rol.codigo == 'SUPERVISOR':
+            # Candado SUPERVISOR: Solo ve las ventas de sus sedes asignadas
+            elif codigo_rol == 'SUPERVISOR':
                 sedes_supervisadas = user.asignaciones_supervisor.filter(
                     activo=True,
                     fecha_fin__isnull=True
@@ -176,6 +180,15 @@ class VentaViewSet(SoftDeleteModelViewSet):
 
                 queryset = queryset.filter(id_origen_venta__in=sedes_supervisadas)
 
-            # Si es BACKOFFICE o DUENO, el if los ignora y ven el queryset completo.
+            # Candado BACKOFFICE: Solo ve las ventas de las sedes donde tiene permiso de acceso
+            elif codigo_rol == 'BACKOFFICE':
+                sedes_asignadas = PermisoAcceso.objects.filter(
+                    id_usuario=user,
+                    id_modalidad_sede__activo=True
+                ).values_list('id_modalidad_sede', flat=True)
+
+                queryset = queryset.filter(id_origen_venta__in=sedes_asignadas)
+
+            # Si el rol es DUEÑO, los IFs lo ignoran y se le devuelve el queryset completo.
 
         return queryset
