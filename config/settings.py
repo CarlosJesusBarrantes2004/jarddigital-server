@@ -180,7 +180,11 @@ SPECTACULAR_SETTINGS = {
 }
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
+CORS_ALLOWED_ORIGINS = [
+    "https://jarddigital-client.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
 
 AUTH_COOKIE = "access_token"
 AUTH_COOKIE_HTTP_ONLY = True
