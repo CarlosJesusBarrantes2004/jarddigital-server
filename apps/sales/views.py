@@ -10,6 +10,7 @@ from apps.users.models import PermisoAcceso
 # Importamos tu papelera de reciclaje y tus aduanas
 from apps.core.mixins import SoftDeleteModelViewSet
 from apps.users.permissions import SoloLecturaOCrearSiEsJefe
+from apps.users.models import PermisoAcceso
 
 from .models import EstadoSOT, SubEstadoSOT, EstadoAudio, Producto, GrabadorAudio
 from .serializers import (
@@ -164,23 +165,28 @@ class VentaViewSet(SoftDeleteModelViewSet):
         ).all()
 
         if hasattr(user, "id_rol") and user.id_rol:
+            # Convertimos a mayúsculas por seguridad (ej. evita fallos si alguien escribe "Asesor")
             codigo_rol = user.id_rol.codigo.upper()
 
+            # Candado ASESOR: Solo ve sus propias ventas
             if codigo_rol == "ASESOR":
                 queryset = queryset.filter(id_asesor=user)
 
+            # Candado SUPERVISOR: Solo ve las ventas de sus sedes asignadas
             elif codigo_rol == "SUPERVISOR":
                 sedes_supervisadas = user.asignaciones_supervisor.filter(
                     activo=True, fecha_fin__isnull=True
                 ).values_list("id_modalidad_sede", flat=True)
                 queryset = queryset.filter(id_origen_venta__in=sedes_supervisadas)
 
-            # ---> NUEVA REGLA CRÍTICA: AISLAMIENTO PARA BACKOFFICE <---
+            # Candado BACKOFFICE: Solo ve las ventas de las sedes donde tiene permiso de acceso
             elif codigo_rol == "BACKOFFICE":
                 sedes_asignadas = PermisoAcceso.objects.filter(
                     id_usuario=user, id_modalidad_sede__activo=True
                 ).values_list("id_modalidad_sede", flat=True)
 
                 queryset = queryset.filter(id_origen_venta__in=sedes_asignadas)
+
+            # Si el rol es DUEÑO, los IFs lo ignoran y se le devuelve el queryset completo.
 
         return queryset
