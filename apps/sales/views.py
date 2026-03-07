@@ -5,6 +5,8 @@ from apps.sales.serializers import VentaSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 
+from apps.users.models import PermisoAcceso
+
 # Importamos tu papelera de reciclaje y tus aduanas
 from apps.core.mixins import SoftDeleteModelViewSet
 from apps.users.permissions import SoloLecturaOCrearSiEsJefe
@@ -144,10 +146,6 @@ class VentaViewSet(SoftDeleteModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        # ==========================================
-        # FASE 1: OPTIMIZACIÓN EXTREMA (SQL JOINs)
-        # ==========================================
-        # Hacemos un JOIN masivo para que Django no haga consultas extra por cada llave foránea
         queryset = Venta.objects.select_related(
             "id_asesor",
             "id_origen_venta__id_sucursal",
@@ -165,24 +163,24 @@ class VentaViewSet(SoftDeleteModelViewSet):
             "venta_origen",
         ).all()
 
-        # ==========================================
-        # FASE 2: SEGURIDAD DE DATOS (Tenant Isolation)
-        # ==========================================
-        # Verificamos qué tipo de usuario está pidiendo los datos
         if hasattr(user, "id_rol") and user.id_rol:
+            codigo_rol = user.id_rol.codigo.upper()
 
-            # Si es un ASESOR, le ponemos un candado: Solo ve sus propias ventas
-            if user.id_rol.codigo == "ASESOR":
+            if codigo_rol == "ASESOR":
                 queryset = queryset.filter(id_asesor=user)
 
-            # Si es SUPERVISOR, solo ve las ventas de sus sedes asignadas
-            elif user.id_rol.codigo == "SUPERVISOR":
+            elif codigo_rol == "SUPERVISOR":
                 sedes_supervisadas = user.asignaciones_supervisor.filter(
                     activo=True, fecha_fin__isnull=True
                 ).values_list("id_modalidad_sede", flat=True)
-
                 queryset = queryset.filter(id_origen_venta__in=sedes_supervisadas)
 
-            # Si es BACKOFFICE o DUENO, el if los ignora y ven el queryset completo.
+            # ---> NUEVA REGLA CRÍTICA: AISLAMIENTO PARA BACKOFFICE <---
+            elif codigo_rol == "BACKOFFICE":
+                sedes_asignadas = PermisoAcceso.objects.filter(
+                    id_usuario=user, id_modalidad_sede__activo=True
+                ).values_list("id_modalidad_sede", flat=True)
+
+                queryset = queryset.filter(id_origen_venta__in=sedes_asignadas)
 
         return queryset

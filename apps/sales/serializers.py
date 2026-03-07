@@ -95,6 +95,7 @@ class VentaSerializer(serializers.ModelSerializer):
     nombre_supervisor = serializers.CharField(
         source="id_supervisor_vigente.id_supervisor.nombre_completo", read_only=True
     )
+
     codigo_tipo_documento = serializers.CharField(
         source="id_tipo_documento.codigo", read_only=True
     )
