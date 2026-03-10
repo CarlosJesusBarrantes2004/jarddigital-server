@@ -179,6 +179,9 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
 }
 
+# Detectamos si estamos en la nube
+ES_PRODUCCION = 'RENDER' in os.environ  # o 'DATABASE_URL' in os.environ
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "https://jarddigital-client.vercel.app",
@@ -186,10 +189,18 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
 
+# --- 1. TU COOKIE DE AUTENTICACIÓN PERSONALIZADA ---
 AUTH_COOKIE = "access_token"
 AUTH_COOKIE_HTTP_ONLY = True
-AUTH_COOKIE_SECURE = False
-AUTH_COOKIE_SAMESITE = "Lax"
+AUTH_COOKIE_SECURE = ES_PRODUCCION
+AUTH_COOKIE_SAMESITE = "None" if ES_PRODUCCION else "Lax"
+
+# --- 2. COOKIES INTERNAS DE DJANGO (Lo que sugirió el otro agente) ---
+SESSION_COOKIE_SECURE = ES_PRODUCCION
+SESSION_COOKIE_SAMESITE = "None" if ES_PRODUCCION else "Lax"
+
+CSRF_COOKIE_SECURE = ES_PRODUCCION
+CSRF_COOKIE_SAMESITE = "None" if ES_PRODUCCION else "Lax"
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=8),
