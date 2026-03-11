@@ -74,7 +74,6 @@ class Producto(models.Model):
     # ==========================================
     # CAMPOS EXISTENTES
     # ==========================================
-    nombre_plan = models.CharField(max_length=100)
     es_alto_valor = models.BooleanField(default=False)
     costo_fijo_plan = models.DecimalField(max_digits=10, decimal_places=2)
     comision_base = models.DecimalField(max_digits=10, decimal_places=2)

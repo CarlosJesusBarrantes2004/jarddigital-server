@@ -47,7 +47,9 @@ class ProductoSerializer(serializers.ModelSerializer):
         model = Producto
         fields = [
             "id",
-            "nombre_plan",
+            "nombre_campana",
+            "tipo_solucion",
+            "nombre_paquete",
             "es_alto_valor",
             "costo_fijo_plan",
             "comision_base",
@@ -87,9 +89,18 @@ class VentaSerializer(serializers.ModelSerializer):
     nombre_asesor = serializers.CharField(
         source="id_asesor.nombre_completo", read_only=True
     )
-    nombre_producto = serializers.CharField(
-        source="id_producto.nombre_plan", read_only=True
+
+    # Campos del producto separados
+    producto_campana = serializers.CharField(
+        source="id_producto.nombre_campana", read_only=True
     )
+    producto_solucion = serializers.CharField(
+        source="id_producto.tipo_solucion", read_only=True
+    )
+    producto_paquete = serializers.CharField(
+        source="id_producto.nombre_paquete", read_only=True
+    )
+
     nombre_estado = serializers.CharField(source="id_estado_sot.nombre", read_only=True)
     codigo_estado = serializers.CharField(source="id_estado_sot.codigo", read_only=True)
     nombre_supervisor = serializers.CharField(
