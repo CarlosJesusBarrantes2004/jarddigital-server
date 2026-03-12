@@ -32,6 +32,8 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "nombre_completo",
             "email",
             "rol",
+            'fecha_nacimiento',
+            'celular',
             "activo",
             "sucursales",
         ]

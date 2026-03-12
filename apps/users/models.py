@@ -24,6 +24,11 @@ class Usuario(AbstractUser):
         related_name="usuarios",
         db_column="id_rol" # ¡Evita que se llame id_rol_id!
     )
+
+    # NUEVOS CAMPOS DE CONTACTO
+    fecha_nacimiento = models.DateField(null=True, blank=True)
+    celular = models.CharField(max_length=20, null=True, blank=True)
+
     activo = models.BooleanField(default=True)
     creado_en = models.DateTimeField(auto_now_add=True)
 

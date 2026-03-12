@@ -171,6 +171,12 @@ class Venta(models.Model):
     # --- AUDIOS ---
     id_grabador_audios = models.ForeignKey(GrabadorAudio, on_delete=models.SET_NULL, null=True,
                                            db_column="id_grabador_audios")
+    nombre_grabador_externo = models.CharField(
+        max_length=150,
+        null=True,
+        blank=True,
+        help_text="Se llena manualmente solo si el id_grabador_audios es 1 (OTROS)"
+    )
     audio_subido = models.BooleanField(default=False)
     fecha_subida_audios = models.DateTimeField(null=True, blank=True)
 
