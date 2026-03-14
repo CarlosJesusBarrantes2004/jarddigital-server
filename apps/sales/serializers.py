@@ -111,6 +111,9 @@ class VentaSerializer(serializers.ModelSerializer):
         source="id_tipo_documento.codigo", read_only=True
     )
 
+    # 1. Creamos un campo dinámico para el nombre final del Grabador
+    grabador_real = serializers.SerializerMethodField(read_only=True)
+
     # 1. Declaramos los nuevos campos calculados
     codigo_sec_origen = serializers.SerializerMethodField(read_only=True)
     codigo_sot_origen = serializers.SerializerMethodField(read_only=True)
@@ -146,6 +149,19 @@ class VentaSerializer(serializers.ModelSerializer):
             # 2. Permitimos que el frontend envíe el ID de la venta origen
             "venta_origen": {"required": False, "allow_null": True},
         }
+
+    # Lógica para decidir qué nombre de Grabador enviar
+    def get_grabador_real(self, obj):
+        # Verificamos que la venta tenga un grabador asignado
+        if obj.id_grabador_audios:
+            # Si es el ID 1 (OTROS) y tiene un nombre externo guardado
+            if obj.id_grabador_audios.id == 1 and obj.nombre_grabador_externo:
+                return f"{obj.nombre_grabador_externo} (Externo)"
+
+            # Si es cualquier otro grabador normal, devolvemos su nombre oficial
+            return obj.id_grabador_audios.nombre_completo
+
+        return None
 
     # 3. Métodos para obtener los datos de la venta origen
     def get_codigo_sec_origen(self, obj):
@@ -222,6 +238,45 @@ class VentaSerializer(serializers.ModelSerializer):
                         "venta_origen": "Acceso denegado: Solo puedes vincular una venta origen que haya sido gestionada por ti."
                     }
                 )
+
+        # =======================================================
+        # D. VALIDACIÓN DE COINCIDENCIA DE MODALIDAD (Sede vs Supervisor)
+        # =======================================================
+        # Extraemos los datos del JSON entrante o de la base de datos si es una edición parcial (PATCH)
+        origen_venta = data.get('id_origen_venta', getattr(self.instance, 'id_origen_venta', None))
+        asignacion_supervisor = data.get('id_supervisor_vigente',
+                                            getattr(self.instance, 'id_supervisor_vigente', None))
+
+        if origen_venta and asignacion_supervisor:
+            # Obtenemos la sede/modalidad a la que está realmente asignado el supervisor
+            # (Ajusta 'id_modalidad_sede' si tu modelo de asignación lo llama de otra forma)
+            sede_del_supervisor = asignacion_supervisor.id_modalidad_sede
+
+            # Si la sede de la venta no es la misma que la sede del supervisor, bloqueamos
+            if origen_venta != sede_del_supervisor:
+                raise serializers.ValidationError({
+                    "id_supervisor_vigente": "Error de seguridad: El supervisor seleccionado pertenece a una modalidad/sede distinta a la de esta venta."
+                })
+
+        # =======================================================
+        # E. VALIDACIÓN DE GRABADOR "OTROS" (ID 1)
+        # =======================================================
+        grabador = data.get('id_grabador_audios', getattr(self.instance, 'id_grabador_audios', None))
+        nombre_externo = data.get('nombre_grabador_externo',
+                                    getattr(self.instance, 'nombre_grabador_externo', None))
+
+        if grabador:
+            # Si el ID del grabador es 1 (OTROS)
+            if grabador.id == 1:
+                # Exigimos que el nombre externo venga lleno y no sean puros espacios
+                if not nombre_externo or str(nombre_externo).strip() == "":
+                    raise serializers.ValidationError({
+                        "nombre_grabador_externo": "Al seleccionar 'OTROS' como grabador, es obligatorio especificar el nombre de la persona."
+                    })
+            else:
+                # Si es un grabador normal de la empresa, limpiamos el campo externo por seguridad
+                if not self.instance or 'nombre_grabador_externo' in data:
+                    data['nombre_grabador_externo'] = None
 
         # =======================================================
         # 1. VALIDACIÓN DE DOCUMENTOS Y REPRESENTANTE LEGAL
