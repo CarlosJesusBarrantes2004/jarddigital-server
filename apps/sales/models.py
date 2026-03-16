@@ -115,6 +115,19 @@ class Venta(models.Model):
     id_distrito_nacimiento = models.ForeignKey(Distrito, on_delete=models.PROTECT, related_name='ventas_nacimiento',
                                                db_column="id_distrito_nacimiento", null=True)
 
+    # --- CLIENTE GENERO ---
+    OPCIONES_GENERO = [
+        ('MASCULINO', 'Masculino'),
+        ('FEMENINO', 'Femenino'),
+        ('NO ESPECIFICADO', 'No Especificado'),
+    ]
+
+    cliente_genero = models.CharField(
+        max_length=20,
+        choices=OPCIONES_GENERO,
+        default="NO ESPECIFICADO"
+    )
+
     # --- EQUIPOS ADICIONALES ---
     cant_decos_adicionales = models.PositiveIntegerField(default=0)
     cant_repetidores_adicionales = models.PositiveIntegerField(default=0)

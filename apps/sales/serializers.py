@@ -109,6 +109,7 @@ class VentaSerializer(serializers.ModelSerializer):
 
             # Obligatorios para Asesor
             'cliente_email': {'required': True, 'allow_null': False},
+            "cliente_genero": {"required": True, "allow_null": False},
             'coordenadas_gps': {'required': True, 'allow_null': False},
             'score_crediticio': {'required': True, 'allow_null': False},
             'fecha_venta': {'required': False, 'allow_null': True},
