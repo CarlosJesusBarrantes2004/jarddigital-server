@@ -144,6 +144,7 @@ class VentaSerializer(serializers.ModelSerializer):
             "cliente_email": {"required": True, "allow_null": False},
             "coordenadas_gps": {"required": True, "allow_null": False},
             "score_crediticio": {"required": True, "allow_null": False},
+            "cliente_genero": {"required": True, "allow_null": False},
             "fecha_venta": {"required": False, "allow_null": True},
             "id_grabador_audios": {"required": True, "allow_null": False},
             # 2. Permitimos que el frontend envíe el ID de la venta origen
@@ -243,9 +244,13 @@ class VentaSerializer(serializers.ModelSerializer):
         # D. VALIDACIÓN DE COINCIDENCIA DE MODALIDAD (Sede vs Supervisor)
         # =======================================================
         # Extraemos los datos del JSON entrante o de la base de datos si es una edición parcial (PATCH)
-        origen_venta = data.get('id_origen_venta', getattr(self.instance, 'id_origen_venta', None))
-        asignacion_supervisor = data.get('id_supervisor_vigente',
-                                            getattr(self.instance, 'id_supervisor_vigente', None))
+        origen_venta = data.get(
+            "id_origen_venta", getattr(self.instance, "id_origen_venta", None)
+        )
+        asignacion_supervisor = data.get(
+            "id_supervisor_vigente",
+            getattr(self.instance, "id_supervisor_vigente", None),
+        )
 
         if origen_venta and asignacion_supervisor:
             # Obtenemos la sede/modalidad a la que está realmente asignado el supervisor
@@ -254,29 +259,37 @@ class VentaSerializer(serializers.ModelSerializer):
 
             # Si la sede de la venta no es la misma que la sede del supervisor, bloqueamos
             if origen_venta != sede_del_supervisor:
-                raise serializers.ValidationError({
-                    "id_supervisor_vigente": "Error de seguridad: El supervisor seleccionado pertenece a una modalidad/sede distinta a la de esta venta."
-                })
+                raise serializers.ValidationError(
+                    {
+                        "id_supervisor_vigente": "Error de seguridad: El supervisor seleccionado pertenece a una modalidad/sede distinta a la de esta venta."
+                    }
+                )
 
         # =======================================================
         # E. VALIDACIÓN DE GRABADOR "OTROS" (ID 1)
         # =======================================================
-        grabador = data.get('id_grabador_audios', getattr(self.instance, 'id_grabador_audios', None))
-        nombre_externo = data.get('nombre_grabador_externo',
-                                    getattr(self.instance, 'nombre_grabador_externo', None))
+        grabador = data.get(
+            "id_grabador_audios", getattr(self.instance, "id_grabador_audios", None)
+        )
+        nombre_externo = data.get(
+            "nombre_grabador_externo",
+            getattr(self.instance, "nombre_grabador_externo", None),
+        )
 
         if grabador:
             # Si el ID del grabador es 1 (OTROS)
             if grabador.id == 1:
                 # Exigimos que el nombre externo venga lleno y no sean puros espacios
                 if not nombre_externo or str(nombre_externo).strip() == "":
-                    raise serializers.ValidationError({
-                        "nombre_grabador_externo": "Al seleccionar 'OTROS' como grabador, es obligatorio especificar el nombre de la persona."
-                    })
+                    raise serializers.ValidationError(
+                        {
+                            "nombre_grabador_externo": "Al seleccionar 'OTROS' como grabador, es obligatorio especificar el nombre de la persona."
+                        }
+                    )
             else:
                 # Si es un grabador normal de la empresa, limpiamos el campo externo por seguridad
-                if not self.instance or 'nombre_grabador_externo' in data:
-                    data['nombre_grabador_externo'] = None
+                if not self.instance or "nombre_grabador_externo" in data:
+                    data["nombre_grabador_externo"] = None
 
         # =======================================================
         # 1. VALIDACIÓN DE DOCUMENTOS Y REPRESENTANTE LEGAL

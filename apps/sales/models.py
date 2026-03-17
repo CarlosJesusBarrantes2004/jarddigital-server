@@ -146,6 +146,7 @@ class Venta(models.Model):
     cliente_mama = models.CharField(max_length=150)
     numero_instalacion = models.CharField(max_length=50)
     cliente_fecha_nacimiento = models.DateTimeField()
+    cliente_genero = models.CharField(max_length=20, default="NO ESPECIFICADO")
 
     # REPRESENTANTE LEGAL (Opcionales, dependen del RUC)
     representante_legal_dni = models.CharField(

@@ -98,7 +98,7 @@ class Command(BaseCommand):
                 "nombre": "Principal",
                 "direccion": "Av. Balta 3633, José Leonardo Ortiz",
             },
-            {"nombre": "Sede Piura", "direccion": "Centro de Piura, Zona Norte"},
+            {"nombre": "Secundaria", "direccion": "Chiclato, Elías Aguirre"},
         ]
 
         for s in sucursales:
@@ -193,20 +193,27 @@ class Command(BaseCommand):
         # 8. POBLAR PRODUCTOS (Con precios base de prueba)
         productos = [
             {
-                "nombre_plan": "2 play fijo 400",
-                "es_alto_valor": False,
-                "costo_fijo_plan": 60.00,
-                "comision_base": 30.00,
+                "nombre_campana": "REGULAR",
+                "tipo_solucion": "2 PLAY",
+                "nombre_paquete": "400 MBPS TV",
+                "es_alto_valor": True,
+                "costo_fijo_plan": 85.00,
+                "comision_base": 55.00,
             },
             {
-                "nombre_plan": "2 play tv 400",
-                "es_alto_valor": True,
-                "costo_fijo_plan": 120.00,
-                "comision_base": 60.00,
+                "nombre_campana": "RELAMPAGO",
+                "tipo_solucion": "2 PLAY",
+                "nombre_paquete": "400 MBPS FIJO 5000",
+                "es_alto_valor": False,
+                "costo_fijo_plan": 47.00,
+                "comision_base": 23.50,
             },
         ]
         for p in productos:
-            Producto.objects.get_or_create(nombre_plan=p["nombre_plan"], defaults=p)
+            # Usamos nombre_paquete como identificador único para el get_or_create
+            Producto.objects.get_or_create(
+                nombre_paquete=p["nombre_paquete"], defaults=p
+            )
         self.stdout.write(self.style.SUCCESS("✅ Productos verificados/creados."))
 
         self.stdout.write(self.style.SUCCESS("🎉 ¡Base de datos poblada con éxito!"))
