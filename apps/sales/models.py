@@ -137,6 +137,19 @@ class Venta(models.Model):
         null=True,
     )
 
+    # --- CLIENTE GENERO ---
+    OPCIONES_GENERO = [
+        ('MASCULINO', 'Masculino'),
+        ('FEMENINO', 'Femenino'),
+        ('NO ESPECIFICADO', 'No Especificado'),
+    ]
+
+    cliente_genero = models.CharField(
+        max_length=20,
+        choices=OPCIONES_GENERO,
+        default="NO ESPECIFICADO"
+    )
+
     # --- EQUIPOS ADICIONALES ---
     cant_decos_adicionales = models.PositiveIntegerField(default=0)
     cant_repetidores_adicionales = models.PositiveIntegerField(default=0)
