@@ -113,6 +113,7 @@ class VentaSerializer(serializers.ModelSerializer):
             'coordenadas_gps': {'required': True, 'allow_null': False},
             'score_crediticio': {'required': True, 'allow_null': False},
             'fecha_venta': {'required': False, 'allow_null': True},
+            "permitir_reingreso": {"required": False},
             'id_grabador_audios': {'required': True, 'allow_null': False},
 
             # 2. Permitimos que el frontend envíe el ID de la venta origen
@@ -150,6 +151,13 @@ class VentaSerializer(serializers.ModelSerializer):
         es_asesor = (user and hasattr(user, 'id_rol') and user.id_rol and user.id_rol.codigo.upper() == 'ASESOR')
 
         # =======================================================
+        # CANDADO ANTI-TRAMPAS PARA REINGRESOS
+        # =======================================================
+        # Si un asesor intenta enviarnos este campo (sea creando o editando), lo borramos silenciosamente.
+        if es_asesor and 'permitir_reingreso' in data:
+            data.pop('permitir_reingreso')
+
+        # =======================================================
         # 0. CANDADOS DE SEGURIDAD Y PERMISOS (ASESOR)
         # =======================================================
         if self.instance:  # Solo aplica si es EDICIÓN (PATCH/PUT)
@@ -171,8 +179,7 @@ class VentaSerializer(serializers.ModelSerializer):
                         })
 
                 # --- REGLA GENERAL: LA PAPA CALIENTE ---
-                # Si NO está en ejecución, aplicamos la regla estricta de solicitud_correccion
-                elif not self.instance.solicitud_correccion:
+                elif not getattr(self.instance, 'solicitud_correccion', False):
                     raise serializers.ValidationError({
                         "bloqueo_total": "No puedes editar esta venta porque está en manos del Backoffice/Operaciones. Espera a que te soliciten una corrección."
                     })
@@ -267,14 +274,14 @@ class VentaSerializer(serializers.ModelSerializer):
                 audios_data = data.get('audios', [])
                 cantidad_audios = len(audios_data)
 
-                if es_dni and cantidad_audios != 12:
+                if es_dni and cantidad_audios > 12:
                     raise serializers.ValidationError({
-                        "audios": f"Para ventas con DNI, se requieren exactamente 12 audios. Has enviado {cantidad_audios}."
+                        "audios": f"Para ventas con DNI, el máximo es 12 audios. Has enviado {cantidad_audios}."
                     })
 
-                elif es_ruc and cantidad_audios != 14:
+                elif es_ruc and cantidad_audios > 14:
                     raise serializers.ValidationError({
-                        "audios": f"Para ventas con RUC, se requieren exactamente 14 audios. Has enviado {cantidad_audios}."
+                        "audios": f"Para ventas con RUC, el máximo es 14 audios. Has enviado {cantidad_audios}."
                     })
 
         return data
