@@ -354,13 +354,20 @@ class VentaSerializer(serializers.ModelSerializer):
         return venta_creada
 
     def update(self, instance, validated_data):
+        # Extraemos el usuario y su rol primero (Lo necesitamos para el candado)
+        request = self.context.get('request')
+        user = request.user
+        es_backoffice = (user.id_rol and user.id_rol.codigo.upper() == 'BACKOFFICE')
+
         # =======================================================
         # 0. CANDADO DE INMUTABILIDAD (REGLA DEL PRODUCT OWNER)
         # =======================================================
         if instance.id_estado_sot and instance.id_estado_sot.codigo.upper() == 'RECHAZADO':
-            raise serializers.ValidationError({
-                "error_critico": "Esta venta ha sido RECHAZADA y está cerrada permanentemente. Para corregirla, el asesor debe generar una nueva venta."
-            })
+            # Y el que intenta editarla NO es el Backoffice...
+            if not es_backoffice:
+                raise serializers.ValidationError({
+                    "error_critico": "Esta venta ha sido RECHAZADA y está cerrada permanentemente. Para corregirla, debes generar una nueva venta."
+                })
 
         # ---> ¡NUEVO: INTERCEPTAR AUDIOS! <---
         # Usamos None por defecto para saber si enviaron o no la llave "audios" en el PATCH
@@ -378,8 +385,7 @@ class VentaSerializer(serializers.ModelSerializer):
             else:
                 validated_data['tipo_venta'] = 'MASIVO'
 
-        request = self.context.get('request')
-        user = request.user
+        # Asignamos el usuario que modifica (Ya lo extrajimos arriba)
         validated_data['usuario_modificacion'] = user
 
         # Extraemos variables de entrada
