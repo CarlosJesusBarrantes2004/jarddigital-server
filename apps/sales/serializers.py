@@ -149,6 +149,7 @@ class VentaSerializer(serializers.ModelSerializer):
             "id_grabador_audios": {"required": True, "allow_null": False},
             # 2. Permitimos que el frontend envíe el ID de la venta origen
             "venta_origen": {"required": False, "allow_null": True},
+            "permitir_reingreso": {"required": False},
         }
 
     # Lógica para decidir qué nombre de Grabador enviar

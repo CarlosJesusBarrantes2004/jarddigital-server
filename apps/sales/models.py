@@ -139,15 +139,13 @@ class Venta(models.Model):
 
     # --- CLIENTE GENERO ---
     OPCIONES_GENERO = [
-        ('MASCULINO', 'Masculino'),
-        ('FEMENINO', 'Femenino'),
-        ('NO ESPECIFICADO', 'No Especificado'),
+        ("MASCULINO", "Masculino"),
+        ("FEMENINO", "Femenino"),
+        ("NO ESPECIFICADO", "No Especificado"),
     ]
 
     cliente_genero = models.CharField(
-        max_length=20,
-        choices=OPCIONES_GENERO,
-        default="NO ESPECIFICADO"
+        max_length=20, choices=OPCIONES_GENERO, default="NO ESPECIFICADO"
     )
 
     # --- EQUIPOS ADICIONALES ---
@@ -218,6 +216,11 @@ class Venta(models.Model):
         blank=True,
     )
     comentario_gestion = models.TextField(null=True, blank=True)
+
+    permitir_reingreso = models.BooleanField(
+        default=False,
+        help_text="Si es True y la venta está RECHAZADA, el asesor podrá crear un reingreso.",
+    )
 
     # --- SEGMENTACIÓN AUTOMÁTICA ---
     # Se llena solo: DNI -> MASIVO, RUC -> CORPORATIVO
