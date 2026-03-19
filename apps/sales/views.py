@@ -8,7 +8,7 @@ from .filters import VentaFilter
 
 #Importamos utils necesarios para reporte de excel
 import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Side, Border
 from openpyxl.utils import get_column_letter
 from django.http import HttpResponse
 from rest_framework.decorators import action
@@ -155,13 +155,23 @@ class VentaViewSet(SoftDeleteModelViewSet):
         ws = wb.active
         ws.title = "Reporte de Ventas"
 
-        # 4. DEFINIR ESTILOS (Los colores del dueño)
-        # Nota: openpyxl usa formato ARGB (Añadimos 'FF' al inicio del Hexadecimal)
+        # 4. DEFINIR ESTILOS (Los colores y bordes del dueño)
         fill_cabecera = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')  # Rojo
         font_cabecera = Font(color='FFFFFFFF', italic=True, bold=True)  # Blanco cursiva
 
         fill_verde = PatternFill(start_color='FF86BF4E', end_color='FF86BF4E', fill_type='solid')  # Verde
         fill_mes_anio = PatternFill(start_color='FFE4CFC6', end_color='FFE4CFC6', fill_type='solid')  # Durazno
+
+        # Definir borde delgado para todas las celdas
+        borde_delgado = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # Alineación centrada para todo el documento
+        alineacion_centrada = Alignment(horizontal='center', vertical='center')
 
         # 5. ESCRIBIR LAS CABECERAS
         cabeceras = [
@@ -176,15 +186,15 @@ class VentaViewSet(SoftDeleteModelViewSet):
         for cell in ws[1]:
             cell.fill = fill_cabecera
             cell.font = font_cabecera
-            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.alignment = alineacion_centrada
+            cell.border = borde_delgado
 
         # 6. LLENAR LOS DATOS FILA POR FILA
         for idx, venta in enumerate(ventas, start=1):
 
             # --- Lógica DNI/RUC ---
-            doc_tipo = venta.id_tipo_documento.codigo.upper() if venta.id_tipo_documento else ""
-            documento = venta.representante_legal_dni if doc_tipo == 'RUC' and venta.representante_legal_dni else (
-                venta.numero_documento if hasattr(venta, 'numero_documento') else "")
+            # Directo al grano: si hay documento lo ponemos, si no, lo dejamos vacío.
+            documento = venta.cliente_numero_doc if hasattr(venta, 'cliente_numero_doc') and venta.cliente_numero_doc else ""
 
             # --- Lógica Departamento ---
             departamento = ""
@@ -200,16 +210,25 @@ class VentaViewSet(SoftDeleteModelViewSet):
             mes_inst = f_inst.month if f_inst else ""
             anio_inst = f_inst.year if f_inst else ""
 
-            # --- Lógica Supervisor (Navegando relaciones) ---
+            # --- Lógica Supervisor ---
             supervisor = ""
             modalidad = ""
             if venta.id_supervisor_vigente:
                 if venta.id_supervisor_vigente.id_supervisor:
                     supervisor = venta.id_supervisor_vigente.id_supervisor.nombre_completo
-
-                    # ¡Navegamos hasta la tabla final para sacar el nombre!
                 if venta.id_supervisor_vigente.id_modalidad_sede and venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad:
                     modalidad = venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad.nombre
+
+            # --- Lógica Género (M/F) ---
+            genero_inicial = ""
+            if venta.cliente_genero:
+                genero_mayuscula = venta.cliente_genero.upper()
+                if genero_mayuscula == 'MASCULINO':
+                    genero_inicial = 'M'
+                elif genero_mayuscula == 'FEMENINO':
+                    genero_inicial = 'F'
+                else:
+                    genero_inicial = venta.cliente_genero  # Por si envían 'NO ESPECIFICADO'
 
             # Armar la fila con el orden exacto de las cabeceras
             fila = [
@@ -234,39 +253,64 @@ class VentaViewSet(SoftDeleteModelViewSet):
                 f_venta.strftime('%d/%m/%Y') if f_venta else "",  # FECHAVENTA
                 mes_vta,  # MES
                 mes_inst,  # MES INST.
-                venta.cliente_celular if hasattr(venta, 'cliente_celular') else "",  # CELULAR
+                venta.cliente_telefono if hasattr(venta, 'cliente_telefono') else "",  # CELULAR
                 "",  # C.PAGO (Vacío)
                 anio_vta,  # AÑO
                 anio_inst,  # AÑO INST.
                 departamento,  # DEPARTAMENTO
-                venta.cliente_genero or "",  # GÉNERO
+                genero_inicial,  # GÉNERO
                 modalidad  # MODALIDAD
             ]
             ws.append(fila)
 
-            # --- Aplicar Colores Específicos a las Celdas ---
+            # --- Aplicar Colores, Bordes y Alineación a las Celdas ---
             fila_actual = ws[ws.max_row]
 
-            # Colorear EST.SOT (Col 12) y EST.AUDIO (Col 14) si son exitosos
-            if fila[11] and fila[11].upper() == 'ATENDIDO':  # Ajusta según el nombre exacto de tu BD
-                fila_actual[11].fill = fill_verde
-            if fila[13] and fila[13].upper() == 'CONFORME':
-                fila_actual[13].fill = fill_verde
+            # Iteramos sobre todas las celdas de la fila que acabamos de agregar
+            for i, celda in enumerate(fila_actual):
+                celda.alignment = alineacion_centrada
+                celda.border = borde_delgado
 
-            # Colorear Meses (20, 21) y Años (24, 25)
-            fila_actual[19].fill = fill_mes_anio
-            fila_actual[20].fill = fill_mes_anio
-            fila_actual[23].fill = fill_mes_anio
-            fila_actual[24].fill = fill_mes_anio
+                # Colorear EST.SOT (Col 12, index 11)
+                if i == 11 and fila[11] and fila[11].upper() == 'ATENDIDO':
+                    celda.fill = fill_verde
+                # Colorear EST.AUDIO (Col 14, index 13)
+                elif i == 13 and fila[13] and fila[13].upper() == 'CONFORME':
+                    celda.fill = fill_verde
+                # Colorear Meses (20, 21, index 19, 20) y Años (24, 25, index 23, 24)
+                elif i in [19, 20, 23, 24]:
+                    celda.fill = fill_mes_anio
 
         # 7. ACTIVAR EL AUTOFILTRO (Para todas las columnas)
         max_col_letra = get_column_letter(len(cabeceras))
         ws.auto_filter.ref = f"A1:{max_col_letra}{ws.max_row}"
 
-        # Ajustar el ancho de las columnas un poco para que no se vea apretado
+        # =======================================================
+        # AUTOAJUSTE INTELIGENTE DE COLUMNAS (El "Doble Clic")
+        # =======================================================
         for col in ws.columns:
-            column = col[0].column_letter
-            ws.column_dimensions[column].width = 15
+            max_length = 0
+            col_letter = col[0].column_letter  # Obtenemos la letra (A, B, C...)
+
+            # Recorremos todas las celdas de esa columna para buscar al más "gordo"
+            for cell in col:
+                try:
+                    if cell.value:
+                        # Convertimos el valor a texto y medimos su longitud
+                        longitud_celda = len(str(cell.value))
+                        if longitud_celda > max_length:
+                            max_length = longitud_celda
+                except:
+                    pass
+
+            # Le sumamos 2 espacios extra de "padding" para que respire y no quede pegado a la línea
+            ancho_ajustado = (max_length + 2)
+
+            # Si la columna es muy angosta (ej. el género "M"), le damos un mínimo para que se lea la cabecera
+            if ancho_ajustado < 10:
+                ancho_ajustado = 10
+
+            ws.column_dimensions[col_letter].width = ancho_ajustado
 
         # 8. PREPARAR LA RESPUESTA HTTP (Despachar el archivo)
         response = HttpResponse(
