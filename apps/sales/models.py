@@ -190,6 +190,11 @@ class Venta(models.Model):
     # False (Default) = La venta está en manos del Backoffice (Bloqueada para el Asesor).
     solicitud_correccion = models.BooleanField(default=False)
 
+    permitir_reingreso = models.BooleanField(
+        default=False,
+        help_text="Si es True y la venta está RECHAZADA, el asesor podrá crear un reingreso."
+    )
+
     # --- OPERATIVO ---
     codigo_sec = models.CharField(max_length=50, null=True, blank=True)
     codigo_sot = models.CharField(max_length=50, null=True, blank=True)
