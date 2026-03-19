@@ -5,6 +5,13 @@ from apps.sales.serializers import VentaSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 
+#Importamos utils necesarios para reporte de excel
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+from django.http import HttpResponse
+from rest_framework.decorators import action
+
 # Importamos tu papelera de reciclaje y tus aduanas
 from apps.core.mixins import SoftDeleteModelViewSet
 from apps.users.permissions import SoloLecturaOCrearSiEsJefe
@@ -133,6 +140,156 @@ class VentaViewSet(SoftDeleteModelViewSet):
     # 3. Ordenamiento (Por defecto, las ventas más nuevas arriba)
     ordering_fields = ['fecha_venta', 'fecha_creacion']
     ordering = ['-fecha_venta']
+
+    #REPORTE DE EXCEL
+    @action(detail=False, methods=['get'])
+    def exportar_excel(self, request):
+        # 1. RECIBIR FECHAS DEL FRONTEND (Si no mandan, exportamos todo por defecto)
+        fecha_inicio = request.query_params.get('fecha_inicio')
+        fecha_fin = request.query_params.get('fecha_fin')
+
+        # 2. LA SÚPER CONSULTA (Optimizada para no colapsar la base de datos)
+        ventas = Venta.objects.all().select_related(
+            'id_producto',
+            'id_estado_sot',
+            'id_estado_audios',
+            'id_asesor',
+            'id_supervisor_vigente__id_supervisor',  # Asumiendo que va al usuario supervisor
+            'id_supervisor_vigente__id_modalidad_sede__id_modalidad',
+            'id_distrito_instalacion__id_provincia__id_departamento'
+        )
+
+        if fecha_inicio and fecha_fin:
+            ventas = ventas.filter(fecha_venta__range=[fecha_inicio, fecha_fin])
+
+        # 3. CREAR EL ARCHIVO EXCEL EN MEMORIA
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Reporte de Ventas"
+
+        # 4. DEFINIR ESTILOS (Los colores del dueño)
+        # Nota: openpyxl usa formato ARGB (Añadimos 'FF' al inicio del Hexadecimal)
+        fill_cabecera = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')  # Rojo
+        font_cabecera = Font(color='FFFFFFFF', italic=True, bold=True)  # Blanco cursiva
+
+        fill_verde = PatternFill(start_color='FF86BF4E', end_color='FF86BF4E', fill_type='solid')  # Verde
+        fill_mes_anio = PatternFill(start_color='FFE4CFC6', end_color='FFE4CFC6', fill_type='solid')  # Durazno
+
+        # 5. ESCRIBIR LAS CABECERAS
+        cabeceras = [
+            "ITEM", "DNI/RUC", "CLIENTE", "SEC", "SOT", "TIPO", "TECN.", "PLAN", "C.FIJO",
+            "SCORE", "COMEN", "EST.SOT", "FECHAINST.", "EST.AUDIO", "AUDIO", "SUBIDA",
+            "SUPERV", "ASESOR", "FECHAVENTA", "MES", "MES INST.", "CELULAR", "C.PAGO",
+            "AÑO", "AÑO INST.", "DEPARTAMENTO", "GÉNERO", "MODALIDAD"
+        ]
+        ws.append(cabeceras)
+
+        # Aplicar estilo rojo a la fila 1 y ajustar altura
+        for cell in ws[1]:
+            cell.fill = fill_cabecera
+            cell.font = font_cabecera
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+
+        # 6. LLENAR LOS DATOS FILA POR FILA
+        for idx, venta in enumerate(ventas, start=1):
+
+            # --- Lógica DNI/RUC ---
+            doc_tipo = venta.id_tipo_documento.codigo.upper() if venta.id_tipo_documento else ""
+            documento = venta.representante_legal_dni if doc_tipo == 'RUC' and venta.representante_legal_dni else (
+                venta.numero_documento if hasattr(venta, 'numero_documento') else "")
+
+            # --- Lógica Departamento ---
+            departamento = ""
+            if venta.id_distrito_instalacion and venta.id_distrito_instalacion.id_provincia:
+                departamento = venta.id_distrito_instalacion.id_provincia.id_departamento.nombre
+
+            # --- Lógica Fechas (Mes/Año) ---
+            f_venta = venta.fecha_venta
+            mes_vta = f_venta.month if f_venta else ""
+            anio_vta = f_venta.year if f_venta else ""
+
+            f_inst = venta.fecha_real_inst
+            mes_inst = f_inst.month if f_inst else ""
+            anio_inst = f_inst.year if f_inst else ""
+
+            # --- Lógica Supervisor (Navegando relaciones) ---
+            supervisor = ""
+            modalidad = ""
+            if venta.id_supervisor_vigente:
+                if venta.id_supervisor_vigente.id_supervisor:
+                    supervisor = venta.id_supervisor_vigente.id_supervisor.nombre_completo
+
+                    # ¡Navegamos hasta la tabla final para sacar el nombre!
+                if venta.id_supervisor_vigente.id_modalidad_sede and venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad:
+                    modalidad = venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad.nombre
+
+            # Armar la fila con el orden exacto de las cabeceras
+            fila = [
+                idx,  # ITEM
+                documento,  # DNI/RUC
+                venta.cliente_nombre,  # CLIENTE
+                venta.codigo_sec or "",  # SEC
+                venta.codigo_sot or "",  # SOT
+                venta.tipo_venta or "",  # TIPO
+                venta.tecnologia or "",  # TECN.
+                venta.id_producto.nombre_paquete if venta.id_producto else "",  # PLAN
+                venta.id_producto.costo_fijo_plan if venta.id_producto else "",  # C.FIJO
+                venta.score_crediticio or "",  # SCORE
+                venta.comentario_gestion or "",  # COMEN
+                venta.id_estado_sot.nombre if venta.id_estado_sot else "",  # EST.SOT
+                f_inst.strftime('%d/%m/%Y') if f_inst else "",  # FECHAINST.
+                venta.id_estado_audios.nombre if venta.id_estado_audios else "",  # EST.AUDIO
+                "✔" if venta.audio_subido else "",  # AUDIO
+                venta.fecha_subida_audios.strftime('%d/%m/%Y') if venta.fecha_subida_audios else "",  # SUBIDA
+                supervisor,  # SUPERV
+                venta.id_asesor.nombre_completo if venta.id_asesor else "",  # ASESOR
+                f_venta.strftime('%d/%m/%Y') if f_venta else "",  # FECHAVENTA
+                mes_vta,  # MES
+                mes_inst,  # MES INST.
+                venta.cliente_celular if hasattr(venta, 'cliente_celular') else "",  # CELULAR
+                "",  # C.PAGO (Vacío)
+                anio_vta,  # AÑO
+                anio_inst,  # AÑO INST.
+                departamento,  # DEPARTAMENTO
+                venta.cliente_genero or "",  # GÉNERO
+                modalidad  # MODALIDAD
+            ]
+            ws.append(fila)
+
+            # --- Aplicar Colores Específicos a las Celdas ---
+            fila_actual = ws[ws.max_row]
+
+            # Colorear EST.SOT (Col 12) y EST.AUDIO (Col 14) si son exitosos
+            if fila[11] and fila[11].upper() == 'ATENDIDO':  # Ajusta según el nombre exacto de tu BD
+                fila_actual[11].fill = fill_verde
+            if fila[13] and fila[13].upper() == 'CONFORME':
+                fila_actual[13].fill = fill_verde
+
+            # Colorear Meses (20, 21) y Años (24, 25)
+            fila_actual[19].fill = fill_mes_anio
+            fila_actual[20].fill = fill_mes_anio
+            fila_actual[23].fill = fill_mes_anio
+            fila_actual[24].fill = fill_mes_anio
+
+        # 7. ACTIVAR EL AUTOFILTRO (Para todas las columnas)
+        max_col_letra = get_column_letter(len(cabeceras))
+        ws.auto_filter.ref = f"A1:{max_col_letra}{ws.max_row}"
+
+        # Ajustar el ancho de las columnas un poco para que no se vea apretado
+        for col in ws.columns:
+            column = col[0].column_letter
+            ws.column_dimensions[column].width = 15
+
+        # 8. PREPARAR LA RESPUESTA HTTP (Despachar el archivo)
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="Reporte_Ventas.xlsx"'
+
+        # Guardar el libro virtual en la respuesta HTTP
+        wb.save(response)
+
+        return response
 
     def get_queryset(self):
         user = self.request.user
