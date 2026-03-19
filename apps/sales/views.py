@@ -304,7 +304,7 @@ class VentaViewSet(SoftDeleteModelViewSet):
                     pass
 
             # Le sumamos 2 espacios extra de "padding" para que respire y no quede pegado a la línea
-            ancho_ajustado = (max_length + 2)
+            ancho_ajustado = (max_length + 5)
 
             # Si la columna es muy angosta (ej. el género "M"), le damos un mínimo para que se lea la cabecera
             if ancho_ajustado < 10:
