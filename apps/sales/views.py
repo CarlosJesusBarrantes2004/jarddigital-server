@@ -4,6 +4,7 @@ from apps.sales.models import Venta
 from apps.sales.serializers import VentaSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
+from .filters import VentaFilter
 
 #Importamos utils necesarios para reporte de excel
 import openpyxl
@@ -69,7 +70,7 @@ class ProductoViewSet(SoftDeleteModelViewSet):
     # Activamos los filtros para que el asesor pueda buscar rápido su plan
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['es_alto_valor', 'nombre_campana', 'tipo_solucion', 'activo']  # ?es_alto_valor=True
-    search_fields = ['nombre_plan']  # ?search=Max 29.90
+    search_fields = ['nombre_paquete', 'nombre_campana']  # ?search=Max 29.90
 
 
 class GrabadorAudioViewSet(viewsets.ReadOnlyModelViewSet):
@@ -119,23 +120,10 @@ class VentaViewSet(SoftDeleteModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
 
     # 1. Filtros exactos para los combos del Backoffice
-    filterset_fields = [
-        'id_estado_sot',
-        'id_sub_estado_sot',
-        'id_estado_audios',
-        'id_producto',
-        'id_origen_venta',
-        'tecnologia',
-        'es_full_claro'
-    ]
+    filterset_class = VentaFilter
 
     # 2. Buscador libre (Para cuando el cliente llama reclamando y solo dan su DNI)
-    search_fields = [
-        'cliente_numero_doc',
-        'cliente_nombre',
-        'codigo_sec',
-        'codigo_sot'
-    ]
+    search_fields = ["cliente_numero_doc", "cliente_nombre", "codigo_sec", "codigo_sot", "id_asesor__nombre_completo"]
 
     # 3. Ordenamiento (Por defecto, las ventas más nuevas arriba)
     ordering_fields = ['fecha_venta', 'fecha_creacion']
