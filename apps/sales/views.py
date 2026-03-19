@@ -132,193 +132,210 @@ class VentaViewSet(SoftDeleteModelViewSet):
     #REPORTE DE EXCEL
     @action(detail=False, methods=['get'])
     def exportar_excel(self, request):
-        # 1. RECIBIR FECHAS DEL FRONTEND (Si no mandan, exportamos todo por defecto)
+        # 1. RECIBIR FECHAS Y ESTADOS DEL FRONTEND
         fecha_inicio = request.query_params.get('fecha_inicio')
         fecha_fin = request.query_params.get('fecha_fin')
+        estado_filtro = request.query_params.get('estado_sot')  # Para cuando busquen uno específico
 
-        # 2. LA SÚPER CONSULTA (Optimizada para no colapsar la base de datos)
-        ventas = Venta.objects.all().select_related(
+        # 2. LA SÚPER CONSULTA BASE
+        ventas_base = Venta.objects.all().select_related(
             'id_producto',
             'id_estado_sot',
             'id_estado_audios',
             'id_asesor',
-            'id_supervisor_vigente__id_supervisor',  # Asumiendo que va al usuario supervisor
+            'id_supervisor_vigente__id_supervisor',
             'id_supervisor_vigente__id_modalidad_sede__id_modalidad',
             'id_distrito_instalacion__id_provincia__id_departamento'
         )
 
         if fecha_inicio and fecha_fin:
-            ventas = ventas.filter(fecha_venta__range=[fecha_inicio, fecha_fin])
+            ventas_base = ventas_base.filter(fecha_venta__range=[fecha_inicio, fecha_fin])
 
-        # 3. CREAR EL ARCHIVO EXCEL EN MEMORIA
+        # 3. CONFIGURACIÓN DEL EXCEL MULTI-HOJA
         wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Reporte de Ventas"
+        wb.remove(wb.active)  # Borramos la hoja en blanco por defecto que crea openpyxl
 
-        # 4. DEFINIR ESTILOS (Los colores y bordes del dueño)
+        # 4. DEFINIR ESTILOS
         fill_cabecera = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')  # Rojo
         font_cabecera = Font(color='FFFFFFFF', italic=True, bold=True)  # Blanco cursiva
 
         fill_verde = PatternFill(start_color='FF86BF4E', end_color='FF86BF4E', fill_type='solid')  # Verde
+        fill_rojo = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')  # Rojo (Para Rechazos)
         fill_mes_anio = PatternFill(start_color='FFE4CFC6', end_color='FFE4CFC6', fill_type='solid')  # Durazno
 
-        # Definir borde delgado para todas las celdas
         borde_delgado = Border(
-            left=Side(style='thin'),
-            right=Side(style='thin'),
-            top=Side(style='thin'),
-            bottom=Side(style='thin')
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin')
         )
-
-        # Alineación centrada para todo el documento
         alineacion_centrada = Alignment(horizontal='center', vertical='center')
 
-        # 5. ESCRIBIR LAS CABECERAS
         cabeceras = [
             "ITEM", "DNI/RUC", "CLIENTE", "SEC", "SOT", "TIPO", "TECN.", "PLAN", "C.FIJO",
             "SCORE", "COMEN", "EST.SOT", "FECHAINST.", "EST.AUDIO", "AUDIO", "SUBIDA",
             "SUPERV", "ASESOR", "FECHAVENTA", "MES", "MES INST.", "CELULAR", "C.PAGO",
             "AÑO", "AÑO INST.", "DEPARTAMENTO", "GÉNERO", "MODALIDAD"
         ]
-        ws.append(cabeceras)
 
-        # Aplicar estilo rojo a la fila 1 y ajustar altura
-        for cell in ws[1]:
-            cell.fill = fill_cabecera
-            cell.font = font_cabecera
-            cell.alignment = alineacion_centrada
-            cell.border = borde_delgado
+        # =======================================================
+        # DICCIONARIO DE HOJAS Y SUS ESTADOS
+        # =======================================================
+        # Aquí mapeamos el Nombre de la Hoja -> [Códigos exactos en la BD]
+        hojas_config = {
+            'ATENDIDA': ['ATENDIDO', 'ATENDIDA'],
+            'EJECUCION': ['EJECUCION'],
+            'RECHAZADA': ['RECHAZADO', 'RECHAZADA']
+        }
 
-        # 6. LLENAR LOS DATOS FILA POR FILA
-        for idx, venta in enumerate(ventas, start=1):
+        # Si el frontend mandó un parámetro específico (?estado_sot=ATENDIDO),
+        # filtramos nuestro diccionario para generar SOLO esa hoja
+        if estado_filtro:
+            estado_filtro = estado_filtro.upper()
+            hojas_config = {k: v for k, v in hojas_config.items() if estado_filtro in v or estado_filtro == k}
+            if not hojas_config:  # Por si mandan algo raro, no rompe el código
+                hojas_config = {estado_filtro: [estado_filtro]}
 
-            # --- Lógica DNI/RUC ---
-            # Directo al grano: si hay documento lo ponemos, si no, lo dejamos vacío.
-            documento = venta.cliente_numero_doc if hasattr(venta, 'cliente_numero_doc') and venta.cliente_numero_doc else ""
+        # =======================================================
+        # CREACIÓN DINÁMICA DE HOJAS (Iteramos sobre las 3)
+        # =======================================================
+        for nombre_hoja, codigos_estado in hojas_config.items():
 
-            # --- Lógica Departamento ---
-            departamento = ""
-            if venta.id_distrito_instalacion and venta.id_distrito_instalacion.id_provincia:
-                departamento = venta.id_distrito_instalacion.id_provincia.id_departamento.nombre
+            # Filtramos de la consulta base SOLO las que corresponden a esta hoja
+            ventas_hoja = ventas_base.filter(id_estado_sot__codigo__in=codigos_estado)
 
-            # --- Lógica Fechas (Mes/Año) ---
-            f_venta = venta.fecha_venta
-            mes_vta = f_venta.month if f_venta else ""
-            anio_vta = f_venta.year if f_venta else ""
+            # Si no hay ventas para este estado, pasamos al siguiente (opcional: puedes borrar este 'if' si quieres que genere la hoja vacía)
+            # if not ventas_hoja.exists():
+            #     continue
 
-            f_inst = venta.fecha_real_inst
-            mes_inst = f_inst.month if f_inst else ""
-            anio_inst = f_inst.year if f_inst else ""
+            ws = wb.create_sheet(title=nombre_hoja)
+            ws.append(cabeceras)
 
-            # --- Lógica Supervisor ---
-            supervisor = ""
-            modalidad = ""
-            if venta.id_supervisor_vigente:
-                if venta.id_supervisor_vigente.id_supervisor:
-                    supervisor = venta.id_supervisor_vigente.id_supervisor.nombre_completo
-                if venta.id_supervisor_vigente.id_modalidad_sede and venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad:
-                    modalidad = venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad.nombre
+            # Pintar cabeceras
+            for cell in ws[1]:
+                cell.fill = fill_cabecera
+                cell.font = font_cabecera
+                cell.alignment = alineacion_centrada
+                cell.border = borde_delgado
 
-            # --- Lógica Género (M/F) ---
-            genero_inicial = ""
-            if venta.cliente_genero:
-                genero_mayuscula = venta.cliente_genero.upper()
-                if genero_mayuscula == 'MASCULINO':
-                    genero_inicial = 'M'
-                elif genero_mayuscula == 'FEMENINO':
-                    genero_inicial = 'F'
+            # 6. LLENAR LOS DATOS DE ESTA HOJA FILA POR FILA
+            for idx, venta in enumerate(ventas_hoja, start=1):
+                documento = venta.cliente_numero_doc if hasattr(venta,
+                                                                'cliente_numero_doc') and venta.cliente_numero_doc else ""
+
+                departamento = ""
+                if venta.id_distrito_instalacion and venta.id_distrito_instalacion.id_provincia:
+                    departamento = venta.id_distrito_instalacion.id_provincia.id_departamento.nombre
+
+                f_venta = venta.fecha_venta
+                mes_vta = f_venta.month if f_venta else ""
+                anio_vta = f_venta.year if f_venta else ""
+
+                # ---> ¡NUEVO: LÓGICA DE FECHA DE INSTALACIÓN VS RECHAZO! <---
+                estado_sot_codigo = venta.id_estado_sot.codigo.upper() if venta.id_estado_sot else ""
+
+                if estado_sot_codigo in ['RECHAZADO', 'RECHAZADA']:
+                    f_inst = venta.fecha_rechazo  # Si es rechazo, usurpa la columna de instalación
                 else:
-                    genero_inicial = venta.cliente_genero  # Por si envían 'NO ESPECIFICADO'
+                    f_inst = venta.fecha_real_inst  # Si no, va la instalación normal
 
-            # Armar la fila con el orden exacto de las cabeceras
-            fila = [
-                idx,  # ITEM
-                documento,  # DNI/RUC
-                venta.cliente_nombre,  # CLIENTE
-                venta.codigo_sec or "",  # SEC
-                venta.codigo_sot or "",  # SOT
-                venta.tipo_venta or "",  # TIPO
-                venta.tecnologia or "",  # TECN.
-                venta.id_producto.nombre_paquete if venta.id_producto else "",  # PLAN
-                venta.id_producto.costo_fijo_plan if venta.id_producto else "",  # C.FIJO
-                venta.score_crediticio or "",  # SCORE
-                venta.comentario_gestion or "",  # COMEN
-                venta.id_estado_sot.nombre if venta.id_estado_sot else "",  # EST.SOT
-                f_inst.strftime('%d/%m/%Y') if f_inst else "",  # FECHAINST.
-                venta.id_estado_audios.nombre if venta.id_estado_audios else "",  # EST.AUDIO
-                "✔" if venta.audio_subido else "",  # AUDIO
-                venta.fecha_subida_audios.strftime('%d/%m/%Y') if venta.fecha_subida_audios else "",  # SUBIDA
-                supervisor,  # SUPERV
-                venta.id_asesor.nombre_completo if venta.id_asesor else "",  # ASESOR
-                f_venta.strftime('%d/%m/%Y') if f_venta else "",  # FECHAVENTA
-                mes_vta,  # MES
-                mes_inst,  # MES INST.
-                venta.cliente_telefono if hasattr(venta, 'cliente_telefono') else "",  # CELULAR
-                "",  # C.PAGO (Vacío)
-                anio_vta,  # AÑO
-                anio_inst,  # AÑO INST.
-                departamento,  # DEPARTAMENTO
-                genero_inicial,  # GÉNERO
-                modalidad  # MODALIDAD
-            ]
-            ws.append(fila)
+                mes_inst = f_inst.month if f_inst else ""
+                anio_inst = f_inst.year if f_inst else ""
 
-            # --- Aplicar Colores, Bordes y Alineación a las Celdas ---
-            fila_actual = ws[ws.max_row]
+                supervisor = ""
+                modalidad = ""
+                if venta.id_supervisor_vigente:
+                    if venta.id_supervisor_vigente.id_supervisor:
+                        supervisor = venta.id_supervisor_vigente.id_supervisor.nombre_completo
+                    if venta.id_supervisor_vigente.id_modalidad_sede and venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad:
+                        modalidad = venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad.nombre
 
-            # Iteramos sobre todas las celdas de la fila que acabamos de agregar
-            for i, celda in enumerate(fila_actual):
-                celda.alignment = alineacion_centrada
-                celda.border = borde_delgado
+                genero_inicial = ""
+                if venta.cliente_genero:
+                    genero_mayuscula = venta.cliente_genero.upper()
+                    if genero_mayuscula == 'MASCULINO':
+                        genero_inicial = 'M'
+                    elif genero_mayuscula == 'FEMENINO':
+                        genero_inicial = 'F'
+                    else:
+                        genero_inicial = venta.cliente_genero
 
-                # Colorear EST.SOT (Col 12, index 11)
-                if i == 11 and fila[11] and fila[11].upper() == 'ATENDIDO':
-                    celda.fill = fill_verde
-                # Colorear EST.AUDIO (Col 14, index 13)
-                elif i == 13 and fila[13] and fila[13].upper() == 'CONFORME':
-                    celda.fill = fill_verde
-                # Colorear Meses (20, 21, index 19, 20) y Años (24, 25, index 23, 24)
-                elif i in [19, 20, 23, 24]:
-                    celda.fill = fill_mes_anio
+                fila = [
+                    idx,
+                    documento,
+                    venta.cliente_nombre,
+                    venta.codigo_sec or "",
+                    venta.codigo_sot or "",
+                    venta.tipo_venta or "",
+                    venta.tecnologia or "",
+                    venta.id_producto.nombre_paquete if venta.id_producto else "",
+                    venta.id_producto.costo_fijo_plan if venta.id_producto else "",
+                    venta.score_crediticio or "",
+                    venta.comentario_gestion or "",
+                    venta.id_estado_sot.nombre if venta.id_estado_sot else "",
+                    f_inst.strftime('%d/%m/%Y') if f_inst else "",
+                    venta.id_estado_audios.nombre if venta.id_estado_audios else "",
+                    "✔" if venta.audio_subido else "",
+                    venta.fecha_subida_audios.strftime('%d/%m/%Y') if venta.fecha_subida_audios else "",
+                    supervisor,
+                    venta.id_asesor.nombre_completo if venta.id_asesor else "",
+                    f_venta.strftime('%d/%m/%Y') if f_venta else "",
+                    mes_vta,
+                    mes_inst,
+                    venta.cliente_telefono if hasattr(venta, 'cliente_telefono') else "",
+                    "",
+                    anio_vta,
+                    anio_inst,
+                    departamento,
+                    genero_inicial,
+                    modalidad
+                ]
+                ws.append(fila)
 
-        # 7. ACTIVAR EL AUTOFILTRO (Para todas las columnas)
-        max_col_letra = get_column_letter(len(cabeceras))
-        ws.auto_filter.ref = f"A1:{max_col_letra}{ws.max_row}"
+                # --- Colores, Bordes y Alineación ---
+                fila_actual = ws[ws.max_row]
+                for i, celda in enumerate(fila_actual):
+                    celda.alignment = alineacion_centrada
+                    celda.border = borde_delgado
 
-        # =======================================================
-        # AUTOAJUSTE INTELIGENTE DE COLUMNAS (El "Doble Clic")
-        # =======================================================
-        for col in ws.columns:
-            max_length = 0
-            col_letter = col[0].column_letter  # Obtenemos la letra (A, B, C...)
+                    # ---> ¡NUEVO: COLORES PARA ESTADO SOT! (Col 12, index 11) <---
+                    if i == 11 and fila[11]:
+                        if fila[11].upper() in ['ATENDIDO', 'ATENDIDA']:
+                            celda.fill = fill_verde
+                        elif fila[11].upper() in ['RECHAZADO', 'RECHAZADA']:
+                            celda.fill = fill_rojo  # Pinta la celda de la palabra "RECHAZADA" de rojo
 
-            # Recorremos todas las celdas de esa columna para buscar al más "gordo"
-            for cell in col:
-                try:
-                    if cell.value:
-                        # Convertimos el valor a texto y medimos su longitud
-                        longitud_celda = len(str(cell.value))
-                        if longitud_celda > max_length:
-                            max_length = longitud_celda
-                except:
-                    pass
+                    # Colorear EST.AUDIO
+                    elif i == 13 and fila[13] and fila[13].upper() == 'CONFORME':
+                        celda.fill = fill_verde
 
-            # Le sumamos 2 espacios extra de "padding" para que respire y no quede pegado a la línea
-            ancho_ajustado = (max_length + 5)
+                    # Colorear Meses y Años
+                    elif i in [19, 20, 23, 24]:
+                        celda.fill = fill_mes_anio
 
-            # Si la columna es muy angosta (ej. el género "M"), le damos un mínimo para que se lea la cabecera
-            if ancho_ajustado < 10:
-                ancho_ajustado = 10
+            # Autocorrecciones de la HOJA ACTUAL (Filtro y Autoajuste)
+            max_col_letra = get_column_letter(len(cabeceras))
+            ws.auto_filter.ref = f"A1:{max_col_letra}{ws.max_row}"
 
-            ws.column_dimensions[col_letter].width = ancho_ajustado
+            for col in ws.columns:
+                max_length = 0
+                col_letter = col[0].column_letter
+                for cell in col:
+                    try:
+                        if cell.value:
+                            longitud_celda = len(str(cell.value))
+                            if longitud_celda > max_length:
+                                max_length = longitud_celda
+                    except:
+                        pass
+                ancho_ajustado = (max_length + 5) if (max_length + 5) >= 10 else 10
+                ws.column_dimensions[col_letter].width = ancho_ajustado
 
-        # 8. PREPARAR LA RESPUESTA HTTP (Despachar el archivo)
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = 'attachment; filename="Reporte_Ventas.xlsx"'
+        # Por si no se creó ninguna hoja (ej. base de datos vacía)
+        if not wb.sheetnames:
+            wb.create_sheet(title="Sin Datos")
 
-        # Guardar el libro virtual en la respuesta HTTP
+        # 8. PREPARAR Y DESPACHAR
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="Reporte_Ventas_Clasificado.xlsx"'
         wb.save(response)
 
         return response
