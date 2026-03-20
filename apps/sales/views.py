@@ -26,6 +26,8 @@ from .serializers import (
     GrabadorAudioSerializer,
 )
 
+from .filters import VentaFilter
+
 
 # ==========================================
 # 1. CATÁLOGOS Y ESTADOS (Fase 1)
@@ -76,7 +78,7 @@ class ProductoViewSet(SoftDeleteModelViewSet):
         "tipo_solucion",
         "activo",
     ]  # ?es_alto_valor=True
-    search_fields = ["nombre_plan"]  # ?search=Max 29.90
+    search_fields = ["nombre_paquete", "nombre_campana"]
 
 
 class GrabadorAudioViewSet(viewsets.ReadOnlyModelViewSet):
@@ -131,6 +133,8 @@ class VentaViewSet(SoftDeleteModelViewSet):
         filters.OrderingFilter,
     ]
 
+    filterset_class = VentaFilter
+
     # 1. Filtros exactos para los combos del Backoffice
     filterset_fields = [
         "id_estado_sot",
@@ -143,7 +147,13 @@ class VentaViewSet(SoftDeleteModelViewSet):
     ]
 
     # 2. Buscador libre (Para cuando el cliente llama reclamando y solo dan su DNI)
-    search_fields = ["cliente_numero_doc", "cliente_nombre", "codigo_sec", "codigo_sot"]
+    search_fields = [
+        "cliente_numero_doc",
+        "cliente_nombre",
+        "codigo_sec",
+        "codigo_sot",
+        "id_asesor__nombre_completo",
+    ]
 
     # 3. Ordenamiento (Por defecto, las ventas más nuevas arriba)
     ordering_fields = ["fecha_venta", "fecha_creacion"]
