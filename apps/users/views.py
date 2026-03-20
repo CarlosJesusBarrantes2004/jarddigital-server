@@ -63,7 +63,10 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
 
     # Activamos búsqueda y filtros
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['id_rol']
+
+    # ---> FIX #7: Añadimos 'activo' a los filterset_fields <---
+    filterset_fields = ['id_rol', 'activo']
+
     search_fields = ['nombre_completo', 'username', 'email']
 
     def get_queryset(self):
@@ -72,7 +75,17 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
         y filtros dinámicos del frontend.
         """
         user = self.request.user
-        queryset = super().get_queryset()
+
+        # ---> FIX #7 MEJORADO: Manejo inteligente del Soft Delete <---
+        activo_param = self.request.query_params.get("activo")
+
+        # Si el frontend pide explícitamente ver los inactivos o todos,
+        # saltamos el filtro por defecto del SoftDeleteModelViewSet usando la propiedad .model
+        if activo_param is not None:
+            queryset = self.queryset
+        else:
+            # Si no mandan el parámetro, usamos el comportamiento normal (solo activos)
+            queryset = super().get_queryset()
 
         # ==========================================
         # FASE 1: SEGURIDAD (Row-Level Security)
@@ -88,7 +101,7 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
 
                 queryset = queryset.filter(
                     id_rol__codigo='ASESOR',
-                    # ¡CORREGIDO: Los dobles guiones bajos son obligatorios!
+                    # ¡Mantenemos tus dobles guiones bajos correctos!
                     permisos__id_modalidad_sede__in=sedes_supervisor_ids
                 ).distinct()
 
