@@ -78,7 +78,8 @@ class GrabadorAudioViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = GrabadorAudio.objects.select_related('id_usuario').all().order_by('id')
     serializer_class = GrabadorAudioSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['activo']
     search_fields = ['nombre_completo']
 
     def get_queryset(self):
