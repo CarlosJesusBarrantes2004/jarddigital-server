@@ -3,6 +3,17 @@ from .models import Venta
 
 
 class VentaFilter(django_filters.FilterSet):
+    # ---> FIX #5: Filtros de fecha de Claude <---
+    # (Cambia 'fecha_creacion__date' por 'fecha_venta' si prefieres filtrar por la fecha real de la venta)
+    fecha_inicio = django_filters.DateFilter(
+        field_name="fecha_creacion__date",
+        lookup_expr="gte",
+    )
+    fecha_fin = django_filters.DateFilter(
+        field_name="fecha_creacion__date",
+        lookup_expr="lte",
+    )
+
     # Filtro normal por ID de estado
     id_estado_sot = django_filters.NumberFilter(field_name="id_estado_sot")
 
@@ -24,6 +35,8 @@ class VentaFilter(django_filters.FilterSet):
     class Meta:
         model = Venta
         fields = [
+            "fecha_inicio",  # Añadido por orden visual
+            "fecha_fin",     # Añadido por orden visual
             "id_estado_sot",
             "id_sub_estado_sot",
             "id_estado_audios",
