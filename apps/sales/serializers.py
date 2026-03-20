@@ -89,6 +89,8 @@ class VentaSerializer(serializers.ModelSerializer):
     codigo_sec_origen = serializers.SerializerMethodField(read_only=True)
     codigo_sot_origen = serializers.SerializerMethodField(read_only=True)
 
+    ya_reingresada = serializers.SerializerMethodField(read_only=True)
+
     # ---> ¡NUEVO CAMPO ANIDADO! <---
     # El nombre de la variable "audios" DEBE coincidir con el related_name="audios" de tu models.py
     audios = AudioVentaSerializer(many=True, required=False)
@@ -143,6 +145,14 @@ class VentaSerializer(serializers.ModelSerializer):
         if obj.venta_origen_id:
             return obj.venta_origen.codigo_sot
         return None
+
+    # ---> FIX #8: NUEVO MÉTODO DE CLAUDE <---
+    def get_ya_reingresada(self, obj):
+        """
+        True si esta venta ya tiene al menos un reingreso activo.
+        """
+        # REVISA ESTO: Cambia 'activo=True' por tu campo real (ej. is_active=True, estado=True)
+        return obj.ventas_derivadas.filter(activo=True).exists()
 
     def validate(self, data):
         # Extraemos el usuario al inicio para usarlo en cualquier validación (Creación o Edición)
