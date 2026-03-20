@@ -162,29 +162,43 @@ class VentaSerializer(serializers.ModelSerializer):
         # =======================================================
         if self.instance:  # Solo aplica si es EDICIÓN (PATCH/PUT)
             if es_asesor:
+
+                # Extraemos el código del estado (si no tiene, será un string vacío "")
                 estado_actual = self.instance.id_estado_sot.codigo.upper() if self.instance.id_estado_sot else ""
 
-                # ¡LA CORRECCIÓN MÁESTRA!
-                # Le preguntamos a la base de datos si esta venta ya tiene archivos de audio adjuntos.
                 ya_tiene_audios = self.instance.audios.exists()
+                tiene_permiso_backoffice = getattr(self.instance, 'solicitud_correccion', False)
 
-                # --- REGLA 1: PUERTA ABIERTA (Solo si tiene 0 audios en nuestra BD) ---
-                if estado_actual == 'EJECUCION' and not ya_tiene_audios:
-                    campos_enviados = set(data.keys())
-                    # Solo le dejamos tocar la llave 'audios'
-                    campos_prohibidos = [campo for campo in campos_enviados if campo != 'audios']
-
-                    if campos_prohibidos:
-                        raise serializers.ValidationError({
-                            "bloqueo_parcial": f"Aún te falta subir los audios, pero NO puedes editar otros datos de la venta. Campos prohibidos detectados: {', '.join(campos_prohibidos)}"
-                        })
-
-                # --- REGLA 2: PUERTA CERRADA (La Papa Caliente estricta) ---
-                # Si ya subió los audios y NO tiene el permiso explícito del backoffice, se bloquea todo.
-                elif not getattr(self.instance, 'solicitud_correccion', False):
+                # --- REGLA 0: EL CANDADO DE LA MUERTE (Venta Rechazada) ---
+                if estado_actual in ['RECHAZADO', 'RECHAZADA']:
                     raise serializers.ValidationError({
-                        "bloqueo_total": "Los audios ya fueron subidos a nuestro sistema. Espera a que el Backoffice los revise y te solicite una corrección para poder editar."
+                        "error_critico": "Esta venta ha sido RECHAZADA permanentemente. No puedes subir audios ni editarla. Debes generar una nueva venta."
                     })
+
+                # --- REGLA 1: PUERTA ABIERTA (0 audios en BD + Estado Permitido) ---
+                # Solo abrimos la puerta si NO tiene audios Y su estado es EJECUCION o está vacío ("")
+                if not ya_tiene_audios and estado_actual in ['EJECUCION', '']:
+
+                    # Si la puerta está abierta pero NO le han dado permiso explícito para editar toda la venta,
+                    # restringimos sus manos para que SOLO pueda tocar la llave 'audios'.
+                    if not tiene_permiso_backoffice:
+                        campos_enviados = set(data.keys())
+                        campos_prohibidos = [campo for campo in campos_enviados if campo != 'audios']
+
+                        if campos_prohibidos:
+                            raise serializers.ValidationError({
+                                "bloqueo_parcial": f"Aún te falta subir los audios iniciales, pero NO tienes permiso para editar otros datos de la venta. Campos prohibidos detectados: {', '.join(campos_prohibidos)}"
+                            })
+
+                # --- REGLA 2: PUERTA CERRADA (Cualquier otro escenario) ---
+                else:
+                    # Cayó aquí porque: o ya subió sus audios, o la venta está en un estado avanzado (ej. ATENDIDO).
+                    # Exigimos SÍ O SÍ la llave del Backoffice para dejarlo pasar.
+                    if not tiene_permiso_backoffice:
+                        motivo = "Los audios ya fueron subidos a nuestro sistema." if ya_tiene_audios else f"La venta se encuentra en estado {estado_actual}."
+                        raise serializers.ValidationError({
+                            "bloqueo_total": f"{motivo} Espera a que el Backoffice revise y te habilite una solicitud de corrección para poder editar."
+                        })
 
         # =======================================================
         # C. VALIDACIÓN DE VENTA ORIGEN (Regla de pertenencia)
