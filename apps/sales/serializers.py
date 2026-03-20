@@ -89,6 +89,7 @@ class VentaSerializer(serializers.ModelSerializer):
     codigo_sec_origen = serializers.SerializerMethodField(read_only=True)
     codigo_sot_origen = serializers.SerializerMethodField(read_only=True)
 
+    # ---> FIX #8: NUEVO CAMPO DE PARA ELIMINAR <---
     ya_reingresada = serializers.SerializerMethodField(read_only=True)
 
     # ---> ¡NUEVO CAMPO ANIDADO! <---
