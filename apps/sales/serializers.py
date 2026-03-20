@@ -101,6 +101,8 @@ class VentaSerializer(serializers.ModelSerializer):
         source="id_producto.nombre_paquete", read_only=True
     )
 
+    ya_reingresada = serializers.SerializerMethodField(read_only=True)
+
     nombre_estado = serializers.CharField(source="id_estado_sot.nombre", read_only=True)
     codigo_estado = serializers.CharField(source="id_estado_sot.codigo", read_only=True)
     nombre_supervisor = serializers.CharField(
@@ -151,6 +153,13 @@ class VentaSerializer(serializers.ModelSerializer):
             # 2. Permitimos que el frontend envíe el ID de la venta origen
             "venta_origen": {"required": False, "allow_null": True},
         }
+
+    def get_ya_reingresada(self, obj):
+        """
+        True si esta venta ya tiene al menos un reingreso activo.
+        Permite al frontend ocultar el botón 'Reingresar' una vez usado.
+        """
+        return obj.ventas_derivadas.filter(activo=True).exists()
 
     # Lógica para decidir qué nombre de Grabador enviar
     def get_grabador_real(self, obj):

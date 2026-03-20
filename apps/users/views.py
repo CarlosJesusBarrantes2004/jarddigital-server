@@ -17,6 +17,10 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import status
+
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
@@ -75,7 +79,7 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
 
     # Activamos búsqueda y filtros
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ["id_rol"]
+    filterset_fields = ["id_rol", "activo"]
     search_fields = ["nombre_completo", "username", "email"]
 
     def get_queryset(self):
@@ -84,7 +88,20 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
         y filtros dinámicos del frontend.
         """
         user = self.request.user
-        queryset = super().get_queryset()
+
+        activo_param = self.request.query_params.get("activo")
+
+        queryset = (
+            Usuario.objects.select_related("id_rol")
+            .prefetch_related(
+                "permisos__id_modalidad_sede__id_sucursal",
+                "permisos__id_modalidad_sede__id_modalidad",
+            )
+            .all()
+        )
+
+        if activo_param is None:
+            queryset = queryset.filter(activo=True)
 
         # ==========================================
         # FASE 1: SEGURIDAD (Row-Level Security)
@@ -116,6 +133,30 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
             ).distinct()
 
         return queryset
+
+    @action(detail=True, methods=["patch"], url_path="reactivar")
+    def reactivar(self, request, pk=None):
+        """
+        PATCH /api/users/empleados/{id}/reactivar/
+        Reactiva un usuario que fue desactivado.
+        Busca en TODOS los usuarios (no solo activos).
+        """
+        try:
+            usuario = Usuario.objects.get(pk=pk)
+        except Usuario.DoesNotExist:
+            return Response(
+                {"detail": "Usuario no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        usuario.activo = True
+        usuario.save(update_fields=["activo"])
+
+        # El signal gestionar_grabador_automatico se dispara automáticamente aquí
+        # y reactiva el GrabadorAudio asociado al usuario. Sin código extra.
+
+        serializer = self.get_serializer(usuario)
+        return Response(serializer.data)
 
 
 class SupervisorAsignacionViewSet(SoftDeleteModelViewSet):

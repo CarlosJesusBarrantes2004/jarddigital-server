@@ -29,6 +29,9 @@ from .serializers import (
 
 from .filters import VentaFilter
 
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import status
 
 # ==========================================
 # 1. CATÁLOGOS Y ESTADOS (Fase 1)
@@ -66,8 +69,6 @@ class EstadoAudioViewSet(SoftDeleteModelViewSet):
 
 
 class ProductoViewSet(SoftDeleteModelViewSet):
-    # Ordenamos por los más recientes primero
-    queryset = Producto.objects.all().order_by("-fecha_inicio_vigencia")
     serializer_class = ProductoSerializer
     permission_classes = [IsAuthenticated, SoloLecturaOCrearSiEsJefe]
 
@@ -81,13 +82,45 @@ class ProductoViewSet(SoftDeleteModelViewSet):
     ]  # ?es_alto_valor=True
     search_fields = ["nombre_paquete", "nombre_campana"]  # ?search=Max 29.90
 
+    def get_queryset(self):
+        activo_param = self.request.query_params.get("activo")
+        queryset = Producto.objects.all().order_by("-fecha_inicio_vigencia")
+        # Default: solo activos (si no vino el parámetro)
+        if activo_param is None:
+            queryset = queryset.filter(activo=True)
+        return queryset
+
+    @action(detail=True, methods=["patch"], url_path="reactivar")
+    def reactivar(self, request, pk=None):
+        """
+        PATCH /api/sales/productos/{id}/reactivar/
+        Reactiva un producto que fue desactivado (soft-delete).
+        Usa get_object() con el queryset BASE (todos los registros),
+        no el filtrado, por eso puede encontrar inactivos.
+        """
+        # Buscamos en TODOS los productos, no solo activos
+        try:
+            producto = Producto.objects.get(pk=pk)
+        except Producto.DoesNotExist:
+            return Response(
+                {"detail": "Producto no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        producto.activo = True
+        producto.save(update_fields=["activo"])
+
+        serializer = self.get_serializer(producto)
+        return Response(serializer.data)
+
 
 class GrabadorAudioViewSet(viewsets.ReadOnlyModelViewSet):
     # El queryset base (trae todos)
     queryset = GrabadorAudio.objects.select_related("id_usuario").all().order_by("id")
     serializer_class = GrabadorAudioSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [filters.SearchFilter]
+    filter_backends = [filters.SearchFilter, filters.SearchFilter]
+    filterset_fields = ["activo"]
     search_fields = ["nombre_completo"]
 
     def get_queryset(self):

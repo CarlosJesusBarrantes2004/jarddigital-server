@@ -25,6 +25,15 @@ class VentaFilter(django_filters.FilterSet):
         field_name="solicitud_correccion"
     )
 
+    fecha_inicio = django_filters.DateFilter(
+        field_name="fecha_creacion__date",
+        lookup_expr="gte",
+    )
+    fecha_fin = django_filters.DateFilter(
+        field_name="fecha_creacion__date",
+        lookup_expr="lte",
+    )
+
     class Meta:
         model = Venta
         fields = [
@@ -36,4 +45,6 @@ class VentaFilter(django_filters.FilterSet):
             "tecnologia",
             "es_full_claro",
             "solicitud_correccion",
+            "fecha_inicio",
+            "fecha_fin",
         ]
