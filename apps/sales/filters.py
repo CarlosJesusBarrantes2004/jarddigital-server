@@ -1,4 +1,3 @@
-# apps/sales/filters.py
 import django_filters
 from .models import Venta
 

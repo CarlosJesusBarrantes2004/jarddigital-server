@@ -4,10 +4,11 @@ from apps.sales.models import Venta
 from apps.sales.serializers import VentaSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
+from .filters import VentaFilter
 
 # Importamos utils necesarios para reporte de excel
 import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Side, Border
 from openpyxl.utils import get_column_letter
 from django.http import HttpResponse
 from rest_framework.decorators import action
@@ -78,7 +79,7 @@ class ProductoViewSet(SoftDeleteModelViewSet):
         "tipo_solucion",
         "activo",
     ]  # ?es_alto_valor=True
-    search_fields = ["nombre_paquete", "nombre_campana"]
+    search_fields = ["nombre_paquete", "nombre_campana"]  # ?search=Max 29.90
 
 
 class GrabadorAudioViewSet(viewsets.ReadOnlyModelViewSet):
@@ -135,17 +136,6 @@ class VentaViewSet(SoftDeleteModelViewSet):
 
     filterset_class = VentaFilter
 
-    # 1. Filtros exactos para los combos del Backoffice
-    filterset_fields = [
-        "id_estado_sot",
-        "id_sub_estado_sot",
-        "id_estado_audios",
-        "id_producto",
-        "id_origen_venta",
-        "tecnologia",
-        "es_full_claro",
-    ]
-
     # 2. Buscador libre (Para cuando el cliente llama reclamando y solo dan su DNI)
     search_fields = [
         "cliente_numero_doc",
@@ -162,31 +152,34 @@ class VentaViewSet(SoftDeleteModelViewSet):
     # REPORTE DE EXCEL
     @action(detail=False, methods=["get"])
     def exportar_excel(self, request):
-        # 1. RECIBIR FECHAS DEL FRONTEND (Si no mandan, exportamos todo por defecto)
+        # 1. RECIBIR FECHAS Y ESTADOS DEL FRONTEND
         fecha_inicio = request.query_params.get("fecha_inicio")
         fecha_fin = request.query_params.get("fecha_fin")
+        estado_filtro = request.query_params.get(
+            "estado_sot"
+        )  # Para cuando busquen uno específico
 
-        # 2. LA SÚPER CONSULTA (Optimizada para no colapsar la base de datos)
-        ventas = Venta.objects.all().select_related(
+        # 2. LA SÚPER CONSULTA BASE
+        ventas_base = Venta.objects.all().select_related(
             "id_producto",
             "id_estado_sot",
             "id_estado_audios",
             "id_asesor",
-            "id_supervisor_vigente__id_supervisor",  # Asumiendo que va al usuario supervisor
+            "id_supervisor_vigente__id_supervisor",
             "id_supervisor_vigente__id_modalidad_sede__id_modalidad",
             "id_distrito_instalacion__id_provincia__id_departamento",
         )
 
         if fecha_inicio and fecha_fin:
-            ventas = ventas.filter(fecha_venta__range=[fecha_inicio, fecha_fin])
+            ventas_base = ventas_base.filter(
+                fecha_venta__range=[fecha_inicio, fecha_fin]
+            )
 
-        # 3. CREAR EL ARCHIVO EXCEL EN MEMORIA
+        # 3. CONFIGURACIÓN DEL EXCEL MULTI-HOJA
         wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Reporte de Ventas"
+        wb.remove(wb.active)  # Borramos la hoja en blanco por defecto que crea openpyxl
 
-        # 4. DEFINIR ESTILOS (Los colores del dueño)
-        # Nota: openpyxl usa formato ARGB (Añadimos 'FF' al inicio del Hexadecimal)
+        # 4. DEFINIR ESTILOS
         fill_cabecera = PatternFill(
             start_color="FFFF0000", end_color="FFFF0000", fill_type="solid"
         )  # Rojo
@@ -195,11 +188,21 @@ class VentaViewSet(SoftDeleteModelViewSet):
         fill_verde = PatternFill(
             start_color="FF86BF4E", end_color="FF86BF4E", fill_type="solid"
         )  # Verde
+        fill_rojo = PatternFill(
+            start_color="FFFF0000", end_color="FFFF0000", fill_type="solid"
+        )  # Rojo (Para Rechazos)
         fill_mes_anio = PatternFill(
             start_color="FFE4CFC6", end_color="FFE4CFC6", fill_type="solid"
         )  # Durazno
 
-        # 5. ESCRIBIR LAS CABECERAS
+        borde_delgado = Border(
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
+        )
+        alineacion_centrada = Alignment(horizontal="center", vertical="center")
+
         cabeceras = [
             "ITEM",
             "DNI/RUC",
@@ -230,144 +233,202 @@ class VentaViewSet(SoftDeleteModelViewSet):
             "GÉNERO",
             "MODALIDAD",
         ]
-        ws.append(cabeceras)
 
-        # Aplicar estilo rojo a la fila 1 y ajustar altura
-        for cell in ws[1]:
-            cell.fill = fill_cabecera
-            cell.font = font_cabecera
-            cell.alignment = Alignment(horizontal="center", vertical="center")
+        # =======================================================
+        # DICCIONARIO DE HOJAS Y SUS ESTADOS
+        # =======================================================
+        # Aquí mapeamos el Nombre de la Hoja -> [Códigos exactos en la BD]
+        hojas_config = {
+            "ATENDIDA": ["ATENDIDO", "ATENDIDA"],
+            "EJECUCION": ["EJECUCION"],
+            "RECHAZADA": ["RECHAZADO", "RECHAZADA"],
+        }
 
-        # 6. LLENAR LOS DATOS FILA POR FILA
-        for idx, venta in enumerate(ventas, start=1):
+        # Si el frontend mandó un parámetro específico (?estado_sot=ATENDIDO),
+        # filtramos nuestro diccionario para generar SOLO esa hoja
+        if estado_filtro:
+            estado_filtro = estado_filtro.upper()
+            hojas_config = {
+                k: v
+                for k, v in hojas_config.items()
+                if estado_filtro in v or estado_filtro == k
+            }
+            if not hojas_config:  # Por si mandan algo raro, no rompe el código
+                hojas_config = {estado_filtro: [estado_filtro]}
 
-            # --- Lógica DNI/RUC ---
-            doc_tipo = (
-                venta.id_tipo_documento.codigo.upper()
-                if venta.id_tipo_documento
-                else ""
-            )
-            documento = (
-                venta.representante_legal_dni
-                if doc_tipo == "RUC" and venta.representante_legal_dni
-                else (
-                    venta.numero_documento if hasattr(venta, "numero_documento") else ""
-                )
-            )
+        # =======================================================
+        # CREACIÓN DINÁMICA DE HOJAS (Iteramos sobre las 3)
+        # =======================================================
+        for nombre_hoja, codigos_estado in hojas_config.items():
 
-            # --- Lógica Departamento ---
-            departamento = ""
-            if (
-                venta.id_distrito_instalacion
-                and venta.id_distrito_instalacion.id_provincia
-            ):
-                departamento = (
-                    venta.id_distrito_instalacion.id_provincia.id_departamento.nombre
-                )
+            # Filtramos de la consulta base SOLO las que corresponden a esta hoja
+            ventas_hoja = ventas_base.filter(id_estado_sot__codigo__in=codigos_estado)
 
-            # --- Lógica Fechas (Mes/Año) ---
-            f_venta = venta.fecha_venta
-            mes_vta = f_venta.month if f_venta else ""
-            anio_vta = f_venta.year if f_venta else ""
+            # Si no hay ventas para este estado, pasamos al siguiente (opcional: puedes borrar este 'if' si quieres que genere la hoja vacía)
+            # if not ventas_hoja.exists():
+            #     continue
 
-            f_inst = venta.fecha_real_inst
-            mes_inst = f_inst.month if f_inst else ""
-            anio_inst = f_inst.year if f_inst else ""
+            ws = wb.create_sheet(title=nombre_hoja)
+            ws.append(cabeceras)
 
-            # --- Lógica Supervisor (Navegando relaciones) ---
-            supervisor = ""
-            modalidad = ""
-            if venta.id_supervisor_vigente:
-                if venta.id_supervisor_vigente.id_supervisor:
-                    supervisor = (
-                        venta.id_supervisor_vigente.id_supervisor.nombre_completo
-                    )
+            # Pintar cabeceras
+            for cell in ws[1]:
+                cell.fill = fill_cabecera
+                cell.font = font_cabecera
+                cell.alignment = alineacion_centrada
+                cell.border = borde_delgado
 
-                    # ¡Navegamos hasta la tabla final para sacar el nombre!
-                if (
-                    venta.id_supervisor_vigente.id_modalidad_sede
-                    and venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad
-                ):
-                    modalidad = (
-                        venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad.nombre
-                    )
-
-            # Armar la fila con el orden exacto de las cabeceras
-            fila = [
-                idx,  # ITEM
-                documento,  # DNI/RUC
-                venta.cliente_nombre,  # CLIENTE
-                venta.codigo_sec or "",  # SEC
-                venta.codigo_sot or "",  # SOT
-                venta.tipo_venta or "",  # TIPO
-                venta.tecnologia or "",  # TECN.
-                venta.id_producto.nombre_paquete if venta.id_producto else "",  # PLAN
-                (
-                    venta.id_producto.costo_fijo_plan if venta.id_producto else ""
-                ),  # C.FIJO
-                venta.score_crediticio or "",  # SCORE
-                venta.comentario_gestion or "",  # COMEN
-                venta.id_estado_sot.nombre if venta.id_estado_sot else "",  # EST.SOT
-                f_inst.strftime("%d/%m/%Y") if f_inst else "",  # FECHAINST.
-                (
-                    venta.id_estado_audios.nombre if venta.id_estado_audios else ""
-                ),  # EST.AUDIO
-                "✔" if venta.audio_subido else "",  # AUDIO
-                (
-                    venta.fecha_subida_audios.strftime("%d/%m/%Y")
-                    if venta.fecha_subida_audios
+            # 6. LLENAR LOS DATOS DE ESTA HOJA FILA POR FILA
+            for idx, venta in enumerate(ventas_hoja, start=1):
+                documento = (
+                    venta.cliente_numero_doc
+                    if hasattr(venta, "cliente_numero_doc") and venta.cliente_numero_doc
                     else ""
-                ),  # SUBIDA
-                supervisor,  # SUPERV
-                venta.id_asesor.nombre_completo if venta.id_asesor else "",  # ASESOR
-                f_venta.strftime("%d/%m/%Y") if f_venta else "",  # FECHAVENTA
-                mes_vta,  # MES
-                mes_inst,  # MES INST.
-                (
-                    venta.cliente_celular if hasattr(venta, "cliente_celular") else ""
-                ),  # CELULAR
-                "",  # C.PAGO (Vacío)
-                anio_vta,  # AÑO
-                anio_inst,  # AÑO INST.
-                departamento,  # DEPARTAMENTO
-                venta.cliente_genero or "",  # GÉNERO
-                modalidad,  # MODALIDAD
-            ]
-            ws.append(fila)
+                )
 
-            # --- Aplicar Colores Específicos a las Celdas ---
-            fila_actual = ws[ws.max_row]
+                departamento = ""
+                if (
+                    venta.id_distrito_instalacion
+                    and venta.id_distrito_instalacion.id_provincia
+                ):
+                    departamento = (
+                        venta.id_distrito_instalacion.id_provincia.id_departamento.nombre
+                    )
 
-            # Colorear EST.SOT (Col 12) y EST.AUDIO (Col 14) si son exitosos
-            if (
-                fila[11] and fila[11].upper() == "ATENDIDO"
-            ):  # Ajusta según el nombre exacto de tu BD
-                fila_actual[11].fill = fill_verde
-            if fila[13] and fila[13].upper() == "CONFORME":
-                fila_actual[13].fill = fill_verde
+                f_venta = venta.fecha_venta
+                mes_vta = f_venta.month if f_venta else ""
+                anio_vta = f_venta.year if f_venta else ""
 
-            # Colorear Meses (20, 21) y Años (24, 25)
-            fila_actual[19].fill = fill_mes_anio
-            fila_actual[20].fill = fill_mes_anio
-            fila_actual[23].fill = fill_mes_anio
-            fila_actual[24].fill = fill_mes_anio
+                # ---> ¡NUEVO: LÓGICA DE FECHA DE INSTALACIÓN VS RECHAZO! <---
+                estado_sot_codigo = (
+                    venta.id_estado_sot.codigo.upper() if venta.id_estado_sot else ""
+                )
 
-        # 7. ACTIVAR EL AUTOFILTRO (Para todas las columnas)
-        max_col_letra = get_column_letter(len(cabeceras))
-        ws.auto_filter.ref = f"A1:{max_col_letra}{ws.max_row}"
+                if estado_sot_codigo in ["RECHAZADO", "RECHAZADA"]:
+                    f_inst = (
+                        venta.fecha_rechazo
+                    )  # Si es rechazo, usurpa la columna de instalación
+                else:
+                    f_inst = venta.fecha_real_inst  # Si no, va la instalación normal
 
-        # Ajustar el ancho de las columnas un poco para que no se vea apretado
-        for col in ws.columns:
-            column = col[0].column_letter
-            ws.column_dimensions[column].width = 15
+                mes_inst = f_inst.month if f_inst else ""
+                anio_inst = f_inst.year if f_inst else ""
 
-        # 8. PREPARAR LA RESPUESTA HTTP (Despachar el archivo)
+                supervisor = ""
+                modalidad = ""
+                if venta.id_supervisor_vigente:
+                    if venta.id_supervisor_vigente.id_supervisor:
+                        supervisor = (
+                            venta.id_supervisor_vigente.id_supervisor.nombre_completo
+                        )
+                    if (
+                        venta.id_supervisor_vigente.id_modalidad_sede
+                        and venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad
+                    ):
+                        modalidad = (
+                            venta.id_supervisor_vigente.id_modalidad_sede.id_modalidad.nombre
+                        )
+
+                genero_inicial = ""
+                if venta.cliente_genero:
+                    genero_mayuscula = venta.cliente_genero.upper()
+                    if genero_mayuscula == "MASCULINO":
+                        genero_inicial = "M"
+                    elif genero_mayuscula == "FEMENINO":
+                        genero_inicial = "F"
+                    else:
+                        genero_inicial = venta.cliente_genero
+
+                fila = [
+                    idx,
+                    documento,
+                    venta.cliente_nombre,
+                    venta.codigo_sec or "",
+                    venta.codigo_sot or "",
+                    venta.tipo_venta or "",
+                    venta.tecnologia or "",
+                    venta.id_producto.nombre_paquete if venta.id_producto else "",
+                    venta.id_producto.costo_fijo_plan if venta.id_producto else "",
+                    venta.score_crediticio or "",
+                    venta.comentario_gestion or "",
+                    venta.id_estado_sot.nombre if venta.id_estado_sot else "",
+                    f_inst.strftime("%d/%m/%Y") if f_inst else "",
+                    venta.id_estado_audios.nombre if venta.id_estado_audios else "",
+                    "✔" if venta.audio_subido else "",
+                    (
+                        venta.fecha_subida_audios.strftime("%d/%m/%Y")
+                        if venta.fecha_subida_audios
+                        else ""
+                    ),
+                    supervisor,
+                    venta.id_asesor.nombre_completo if venta.id_asesor else "",
+                    f_venta.strftime("%d/%m/%Y") if f_venta else "",
+                    mes_vta,
+                    mes_inst,
+                    (
+                        venta.cliente_telefono
+                        if hasattr(venta, "cliente_telefono")
+                        else ""
+                    ),
+                    "",
+                    anio_vta,
+                    anio_inst,
+                    departamento,
+                    genero_inicial,
+                    modalidad,
+                ]
+                ws.append(fila)
+
+                # --- Colores, Bordes y Alineación ---
+                fila_actual = ws[ws.max_row]
+                for i, celda in enumerate(fila_actual):
+                    celda.alignment = alineacion_centrada
+                    celda.border = borde_delgado
+
+                    # ---> ¡NUEVO: COLORES PARA ESTADO SOT! (Col 12, index 11) <---
+                    if i == 11 and fila[11]:
+                        if fila[11].upper() in ["ATENDIDO", "ATENDIDA"]:
+                            celda.fill = fill_verde
+                        elif fila[11].upper() in ["RECHAZADO", "RECHAZADA"]:
+                            celda.fill = fill_rojo  # Pinta la celda de la palabra "RECHAZADA" de rojo
+
+                    # Colorear EST.AUDIO
+                    elif i == 13 and fila[13] and fila[13].upper() == "CONFORME":
+                        celda.fill = fill_verde
+
+                    # Colorear Meses y Años
+                    elif i in [19, 20, 23, 24]:
+                        celda.fill = fill_mes_anio
+
+            # Autocorrecciones de la HOJA ACTUAL (Filtro y Autoajuste)
+            max_col_letra = get_column_letter(len(cabeceras))
+            ws.auto_filter.ref = f"A1:{max_col_letra}{ws.max_row}"
+
+            for col in ws.columns:
+                max_length = 0
+                col_letter = col[0].column_letter
+                for cell in col:
+                    try:
+                        if cell.value:
+                            longitud_celda = len(str(cell.value))
+                            if longitud_celda > max_length:
+                                max_length = longitud_celda
+                    except:
+                        pass
+                ancho_ajustado = (max_length + 5) if (max_length + 5) >= 10 else 10
+                ws.column_dimensions[col_letter].width = ancho_ajustado
+
+        # Por si no se creó ninguna hoja (ej. base de datos vacía)
+        if not wb.sheetnames:
+            wb.create_sheet(title="Sin Datos")
+
+        # 8. PREPARAR Y DESPACHAR
         response = HttpResponse(
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-        response["Content-Disposition"] = 'attachment; filename="Reporte_Ventas.xlsx"'
-
-        # Guardar el libro virtual en la respuesta HTTP
+        response["Content-Disposition"] = (
+            'attachment; filename="Reporte_Ventas_Clasificado.xlsx"'
+        )
         wb.save(response)
 
         return response

@@ -199,19 +199,20 @@ class VentaSerializer(serializers.ModelSerializer):
         # =======================================================
         if self.instance:  # Solo aplica si es EDICIÓN (PATCH/PUT)
             if es_asesor:
-                # Obtenemos el código del estado actual (si tiene)
                 estado_actual = (
                     self.instance.id_estado_sot.codigo.upper()
                     if self.instance.id_estado_sot
                     else ""
                 )
 
-                # --- EXCEPCIÓN: ESTADO 'EJECUCION' (Solo Audios) ---
-                if estado_actual == "EJECUCION":
-                    # Revisamos qué campos está intentando enviar el Asesor
-                    campos_enviados = set(data.keys())
+                # ¡LA CORRECCIÓN MÁESTRA!
+                # Le preguntamos a la base de datos si esta venta ya tiene archivos de audio adjuntos.
+                ya_tiene_audios = self.instance.audios.exists()
 
-                    # Si hay algún campo que NO sea 'audios', bloqueamos.
+                # --- REGLA 1: PUERTA ABIERTA (Solo si tiene 0 audios en nuestra BD) ---
+                if estado_actual == "EJECUCION" and not ya_tiene_audios:
+                    campos_enviados = set(data.keys())
+                    # Solo le dejamos tocar la llave 'audios'
                     campos_prohibidos = [
                         campo for campo in campos_enviados if campo != "audios"
                     ]
@@ -219,15 +220,16 @@ class VentaSerializer(serializers.ModelSerializer):
                     if campos_prohibidos:
                         raise serializers.ValidationError(
                             {
-                                "bloqueo_parcial": f"La venta está en EJECUCIÓN. Solo se permite editar los audios. Campos prohibidos detectados: {', '.join(campos_prohibidos)}"
+                                "bloqueo_parcial": f"Aún te falta subir los audios, pero NO puedes editar otros datos de la venta. Campos prohibidos detectados: {', '.join(campos_prohibidos)}"
                             }
                         )
 
-                # --- REGLA GENERAL: LA PAPA CALIENTE ---
+                # --- REGLA 2: PUERTA CERRADA (La Papa Caliente estricta) ---
+                # Si ya subió los audios y NO tiene el permiso explícito del backoffice, se bloquea todo.
                 elif not getattr(self.instance, "solicitud_correccion", False):
                     raise serializers.ValidationError(
                         {
-                            "bloqueo_total": "No puedes editar esta venta porque está en manos del Backoffice/Operaciones. Espera a que te soliciten una corrección."
+                            "bloqueo_total": "Los audios ya fueron subidos a nuestro sistema. Espera a que el Backoffice los revise y te solicite una corrección para poder editar."
                         }
                     )
 
@@ -340,26 +342,32 @@ class VentaSerializer(serializers.ModelSerializer):
                     data["representante_legal_nombre"] = None
 
             # =======================================================
-            # B. VALIDACIÓN DE CANTIDAD DE AUDIOS (Solo en CREACIÓN/POST)
+            # REGLA 3: AUDIOS "TODO O NADA" (Aplica en Creación y Edición)
             # =======================================================
-            if not self.instance:
-                audios_data = data.get("audios", [])
+            audios_data = data.get("audios")
+
+            if audios_data is not None:
                 cantidad_audios = len(audios_data)
 
-                if es_dni and cantidad_audios > 12:
-                    raise serializers.ValidationError(
-                        {
-                            "audios": f"Para ventas con DNI, el máximo es 12 audios. Has enviado {cantidad_audios}."
-                        }
-                    )
+                # Averiguamos si la venta ya tenía audios de antes
+                ya_tiene_audios = (
+                    self.instance.audios.exists() if self.instance else False
+                )
 
-                elif es_ruc and cantidad_audios > 14:
-                    raise serializers.ValidationError(
-                        {
-                            "audios": f"Para ventas con RUC, el máximo es 14 audios. Has enviado {cantidad_audios}."
-                        }
-                    )
-
+                # SOLO exigimos los 12 o 14 si es la primera vez que sube audios
+                if not ya_tiene_audios and cantidad_audios > 0:
+                    if es_dni and cantidad_audios != 12:
+                        raise serializers.ValidationError(
+                            {
+                                "audios": f"Para la primera subida, debes enviar TODOS los audios obligatorios (12 para DNI). Has intentado subir {cantidad_audios}."
+                            }
+                        )
+                    elif es_ruc and cantidad_audios != 14:
+                        raise serializers.ValidationError(
+                            {
+                                "audios": f"Para la primera subida, debes enviar TODOS los audios obligatorios (14 para RUC). Has intentado subir {cantidad_audios}."
+                            }
+                        )
         return data
 
     def create(self, validated_data):
