@@ -18,6 +18,7 @@ from apps.core.mixins import SoftDeleteModelViewSet
 from apps.users.permissions import SoloLecturaOCrearSiEsJefe
 from apps.users.models import PermisoAcceso
 
+from .selectors import obtener_grabadores_disponibles
 from .models import EstadoSOT, SubEstadoSOT, EstadoAudio, Producto, GrabadorAudio
 from .serializers import (
     EstadoSOTSerializer,
@@ -83,28 +84,11 @@ class GrabadorAudioViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['nombre_completo']
 
     def get_queryset(self):
-        # 1. Obtenemos la lista completa inicial
         queryset = super().get_queryset()
 
-        # 2. Solo aplicamos la lógica de exclusión si estamos LISTANDO (para el dropdown)
+        # 1. Delegamos las reglas de negocio al Selector
         if self.action == 'list':
-            hoy = timezone.now().date()
-
-            # 3. Buscamos los grabadores que están "Ocupados" hoy.
-            # REGLA: Ocupado = Tiene venta creada HOY y la venta está ACTIVA.
-            # (Esto bloquea Rechazados, Pendientes, etc. Solo libera si activo=False es decir ANULADA)
-            ids_bloqueados = Venta.objects.filter(
-                fecha_creacion__date=hoy,
-                activo=True
-            ).exclude(
-                # REGLA DE ORO: El ID 1 (OTROS) NUNCA entra en la lista negra.
-                # Aunque tenga 1000 ventas activas hoy, lo sacamos de la lista de bloqueados.
-                id_grabador_audios=1
-            ).values_list('id_grabador_audios', flat=True)
-
-            # 4. Excluimos los IDs bloqueados de la respuesta final
-            if ids_bloqueados:
-                queryset = queryset.exclude(id__in=ids_bloqueados)
+            queryset = obtener_grabadores_disponibles(queryset_base=queryset)
 
         return queryset
 
