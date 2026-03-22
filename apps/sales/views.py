@@ -71,7 +71,7 @@ class ProductoViewSet(SoftDeleteModelViewSet):
 
 class GrabadorAudioViewSet(viewsets.ReadOnlyModelViewSet):
     # El queryset base (trae todos)
-    queryset = GrabadorAudio.objects.select_related('id_usuario').all().order_by('id')
+    queryset = GrabadorAudio.objects.select_related('id_usuario').filter(activo=True).order_by('id')
     serializer_class = GrabadorAudioSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
@@ -81,9 +81,15 @@ class GrabadorAudioViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
 
-        # 1. Delegamos las reglas de negocio al Selector
         if self.action == 'list':
-            queryset = obtener_grabadores_disponibles(queryset_base=queryset)
+            # 1. Capturamos si el frontend está editando una venta (ej: ?id_venta_actual=15)
+            id_venta_actual = self.request.query_params.get('id_venta_actual')
+
+            # 2. Le pasamos ese ID al selector
+            queryset = obtener_grabadores_disponibles(
+                queryset_base=queryset,
+                id_venta_actual=id_venta_actual
+            )
 
         return queryset
 

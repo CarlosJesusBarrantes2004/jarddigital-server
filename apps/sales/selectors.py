@@ -4,21 +4,34 @@ from apps.users.models import PermisoAcceso
 from .models import Venta
 
 
-def obtener_grabadores_disponibles(queryset_base: QuerySet) -> QuerySet:
+def obtener_grabadores_disponibles(queryset_base: QuerySet, id_venta_actual: int = None) -> QuerySet:
     """
     Filtra el queryset de GrabadorAudio para devolver solo los disponibles hoy.
-    Reglas de Negocio:
-    1. Ocupado = Tiene venta creada HOY y la venta está ACTIVA.
-    2. Excepción: El ID 1 (OTROS) siempre está disponible.
+    Si se está editando una venta (id_venta_actual), se le da un 'Pase VIP' al grabador de esa venta.
     """
     hoy = timezone.now().date()
 
+    # 1. Buscamos los ocupados hoy
     ids_bloqueados = Venta.objects.filter(
         fecha_creacion__date=hoy,
         activo=True
     ).exclude(
-        id_grabador_audios=1  # REGLA DE ORO
+        id_grabador_audios=1
     ).values_list('id_grabador_audios', flat=True)
+
+    # Convertimos a un Set mutable para poder manipular la lista
+    ids_bloqueados = set(ids_bloqueados)
+
+    # ---> LA MAGIA DEL PASE VIP <---
+    # 2. Si el frontend nos avisa que está editando una venta específica...
+    if id_venta_actual:
+        venta_actual = Venta.objects.filter(id=id_venta_actual).first()
+        if venta_actual and venta_actual.id_grabador_audios:
+            grabador_actual_id = venta_actual.id_grabador_audios.id
+
+            # Si el dueño está en la lista negra, lo sacamos para que SÍ aparezca en el dropdown
+            if grabador_actual_id in ids_bloqueados:
+                ids_bloqueados.remove(grabador_actual_id)
 
     if ids_bloqueados:
         return queryset_base.exclude(id__in=ids_bloqueados)

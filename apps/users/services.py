@@ -12,7 +12,7 @@ def _sincronizar_grabador(usuario: Usuario):
         return
 
     if usuario.id_rol.codigo == 'BACKOFFICE':
-        GrabadorAudio.objects.filter(id_usuario=usuario).delete()
+        GrabadorAudio.objects.filter(id_usuario=usuario).update(activo=False)
     else:
         GrabadorAudio.objects.update_or_create(
             id_usuario=usuario,
