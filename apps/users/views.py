@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from .serializers import UsuarioSerializer, UsuarioAdminSerializer, RolSistemaSerializer, SupervisorAsignacionSerializer
 from .permissions import PuedeGestionarUsuarios, SoloLecturaRolesOCrearDueno
 from .models import Usuario, RolSistema, SupervisorAsignacion
+from .selectors import obtener_usuarios_permitidos
 from apps.core.mixins import SoftDeleteModelViewSet
 from django.conf import settings
 from django_filters.rest_framework import DjangoFilterBackend
@@ -70,44 +71,15 @@ class UsuarioViewSet(SoftDeleteModelViewSet):
     search_fields = ['nombre_completo', 'username', 'email']
 
     def get_queryset(self):
-        """
-        Sobreescribimos la consulta base para aplicar filtros de seguridad
-        y filtros dinámicos del frontend.
-        """
-        user = self.request.user
-
-        # ---> VOLVEMOS A LO LIMPIO: El Mixin ahora hace toda la magia <---
         queryset = super().get_queryset()
 
-        # ==========================================
-        # FASE 1: SEGURIDAD (Row-Level Security)
-        # ==========================================
-        if hasattr(user, 'id_rol') and user.id_rol:
+        # 1. Aplicamos Seguridad de Filas usando el Selector
+        queryset = obtener_usuarios_permitidos(self.request.user, queryset)
 
-            # Si es SUPERVISOR, creamos su "universo cerrado" de datos
-            if user.id_rol.codigo == 'SUPERVISOR':
-                sedes_supervisor_ids = user.asignaciones_supervisor.filter(
-                    activo=True,
-                    fecha_fin__isnull=True
-                ).values_list('id_modalidad_sede', flat=True)
-
-                queryset = queryset.filter(
-                    id_rol__codigo='ASESOR',
-                    # ¡Mantenemos tus dobles guiones bajos correctos!
-                    permisos__id_modalidad_sede__in=sedes_supervisor_ids
-                ).distinct()
-
-        # ==========================================
-        # FASE 2: FILTRO DINÁMICO DEL FRONTEND
-        # ==========================================
-        # Leemos el parámetro de la URL (ej: /usuarios/?id_modalidad_sede=3)
+        # 2. Filtro Dinámico del Frontend
         filtro_sede_id = self.request.query_params.get("id_modalidad_sede")
-
         if filtro_sede_id:
-            # Filtramos el universo de usuarios para mostrar solo los de esa sede
-            queryset = queryset.filter(
-                permisos__id_modalidad_sede=filtro_sede_id
-            ).distinct()
+            queryset = queryset.filter(permisos__id_modalidad_sede=filtro_sede_id).distinct()
 
         return queryset
 
