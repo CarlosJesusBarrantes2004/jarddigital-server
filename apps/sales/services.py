@@ -330,3 +330,51 @@ def actualizar_venta(*, venta: Venta, datos_validados: dict, usuario_peticion) -
                 )
 
     return venta
+
+
+def eliminar_venta_definitiva(*, venta: Venta, usuario_peticion) -> None:
+    """
+    Realiza un Hard Delete (borrado físico) de la base de datos.
+    Reglas:
+    - ADMIN/DUEÑO: Borran lo que quieran.
+    - ASESOR: Solo sus ventas, y solo en estado PENDIENTE.
+    """
+    es_super_admin = usuario_peticion.is_superuser
+    es_rol_admin = hasattr(usuario_peticion,
+                           'id_rol') and usuario_peticion.id_rol and usuario_peticion.id_rol.codigo.upper() in ['ADMIN',
+                                                                                                                'DUEÑO']
+    es_asesor = hasattr(usuario_peticion,
+                        'id_rol') and usuario_peticion.id_rol and usuario_peticion.id_rol.codigo.upper() == 'ASESOR'
+
+    # 1. EVALUACIÓN DE PERMISOS Y REGLAS
+    if es_super_admin or es_rol_admin:
+        # Nivel Dios: Pase libre para borrar.
+        pass
+
+    elif es_asesor:
+        # Nivel Mortal: Reglas estrictas.
+
+        # A. ¿Es su propia venta?
+        if venta.id_asesor != usuario_peticion:
+            raise ValidationError({
+                "error_seguridad": "Acceso denegado. Solo puedes eliminar las ventas que tú mismo has creado."
+            })
+
+        # B. ¿Está en estado PENDIENTE o Vacío?
+        estado_actual = venta.id_estado_sot.codigo.upper() if venta.id_estado_sot else ""
+
+        # Asumimos que si está en blanco o dice PENDIENTE, es descartable.
+        if estado_actual not in ['', 'PENDIENTE']:
+            raise ValidationError({
+                "bloqueo_estado": f"No puedes eliminar esta venta porque ya avanzó al estado {estado_actual}. Solo se pueden descartar ventas recién creadas."
+            })
+
+    else:
+        # Cualquier otro rol (Ej. Supervisor, Backoffice) no puede borrar.
+        raise ValidationError({
+            "error_critico": "Tu rol no tiene permisos para realizar borrados definitivos."
+        })
+
+    # 2. LA EJECUCIÓN DEL BOTÓN NUCLEAR
+    # Borrado físico en cascada
+    venta.delete()
