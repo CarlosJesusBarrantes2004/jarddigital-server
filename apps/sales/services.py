@@ -18,10 +18,6 @@ def generar_excel_ventas(fecha_inicio: str = None, fecha_fin: str = None, estado
     # ---> 1. EL CANDADO: Usamos el selector en lugar de objects.all() <---
     ventas_base = obtener_ventas_permitidas(usuario_peticion)
 
-    # ---> 2. OPTIMIZACIÓN EXCEL <---
-    ventas_base = ventas_base.select_related(
-        'id_distrito_instalacion__id_provincia__id_departamento'
-    )
 
     if fecha_inicio and fecha_fin:
         ventas_base = ventas_base.filter(fecha_venta__range=[fecha_inicio, fecha_fin])
