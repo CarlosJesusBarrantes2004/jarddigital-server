@@ -169,6 +169,7 @@ REST_FRAMEWORK = {
         "apps.users.authentication.CustomCookieJWTAuthentication",
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.PaginacionRetrocompatible",
 }
 
 SPECTACULAR_SETTINGS = {
