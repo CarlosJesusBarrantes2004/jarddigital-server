@@ -11,8 +11,11 @@ from apps.core.mixins import SoftDeleteModelViewSet
 from apps.users.permissions import SoloLecturaOCrearSiEsJefe
 from apps.users.models import PermisoAcceso
 
+from rest_framework import status
+from rest_framework.response import Response
+
 from .selectors import obtener_ventas_permitidas
-from .services import generar_excel_ventas
+from .services import generar_excel_ventas, eliminar_venta_definitiva
 from .selectors import obtener_grabadores_disponibles
 from .models import EstadoSOT, SubEstadoSOT, EstadoAudio, Producto, GrabadorAudio
 from .serializers import (
@@ -125,4 +128,20 @@ class VentaViewSet(SoftDeleteModelViewSet):
             fecha_fin=fecha_fin,
             estado_filtro=estado_filtro,
             usuario_peticion=request.user  # ¡El candado!
+        )
+
+    # ---> LA RUTA SECRETA DEL HARD DELETE <---
+    # url_path='hard-delete' significa que la URL será: /api/sales/ventas/{id}/hard-delete/
+    @action(detail=True, methods=['delete'], url_path='hard-delete')
+    def hard_delete(self, request, pk=None):
+        # 1. El get_object() busca la venta por su ID. Si no existe, lanza 404 automático.
+        venta = self.get_object()
+
+        # 2. Le pasamos la bomba al servicio
+        eliminar_venta_definitiva(venta=venta, usuario_peticion=request.user)
+
+        # 3. Respondemos con 204 No Content (El estándar HTTP para un borrado exitoso)
+        return Response(
+            {"mensaje": "La venta y todos sus registros asociados fueron eliminados físicamente de la base de datos."},
+            status=status.HTTP_204_NO_CONTENT
         )
