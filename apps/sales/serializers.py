@@ -257,18 +257,20 @@ class VentaSerializer(serializers.ModelSerializer):
                         }
                     )
 
-                # --- REGLA 1: PUERTA ABIERTA (0 audios en BD + Estado Permitido) ---
-                # Solo abrimos la puerta si NO tiene audios Y su estado es EJECUCION o está vacío ("")
+                # --- REGLA 1: PUERTA ABIERTA ---
                 if not ya_tiene_audios and estado_actual in ["EJECUCION", ""]:
-
-                    # Si la puerta está abierta pero NO le han dado permiso explícito para editar toda la venta,
-                    # restringimos sus manos para que SOLO pueda tocar la llave 'audios'.
                     if not tiene_permiso_backoffice:
                         campos_enviados = set(data.keys())
+                        campos_permitidos_sin_backoffice = {
+                            "audios",
+                            "id_grabador_audios",
+                            "nombre_grabador_externo",
+                        }
                         campos_prohibidos = [
-                            campo for campo in campos_enviados if campo != "audios"
+                            campo
+                            for campo in campos_enviados
+                            if campo not in campos_permitidos_sin_backoffice
                         ]
-
                         if campos_prohibidos:
                             raise serializers.ValidationError(
                                 {
@@ -401,7 +403,7 @@ class VentaSerializer(serializers.ModelSerializer):
                     data["representante_legal_nombre"] = None
 
             # =======================================================
-            # REGLA 3: AUDIOS "TODO O NADA" (Aplica en Creación y Edición)
+            # REGLA 3: AUDIOS Y GRABADOR (Dependencia mutua)
             # =======================================================
             audios_data = data.get("audios")
             cantidad_audios = len(audios_data) if audios_data is not None else 0
