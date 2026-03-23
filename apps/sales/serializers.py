@@ -120,7 +120,7 @@ class VentaSerializer(serializers.ModelSerializer):
             'score_crediticio': {'required': True, 'allow_null': False},
             'fecha_venta': {'required': False, 'allow_null': True},
             "permitir_reingreso": {"required": False},
-            'id_grabador_audios': {'required': True, 'allow_null': False},
+            'id_grabador_audios': {'required': False, 'allow_null': True},
 
             # 2. Permitimos que el frontend envíe el ID de la venta origen
             "venta_origen": {"required": False, "allow_null": True},
@@ -307,23 +307,33 @@ class VentaSerializer(serializers.ModelSerializer):
             # REGLA 3: AUDIOS "TODO O NADA" (Aplica en Creación y Edición)
             # =======================================================
             audios_data = data.get('audios')
+            cantidad_audios = len(audios_data) if audios_data is not None else 0
+            ya_tiene_audios = bool(self.instance.audios.all()) if self.instance else False
 
-            if audios_data is not None:
-                cantidad_audios = len(audios_data)
+            if grabador:
+                # 3.A: SI HAY GRABADOR
+                if not ya_tiene_audios:
+                    # Exigimos audios si es la primera vez
+                    if cantidad_audios == 0:
+                        raise serializers.ValidationError({
+                            "audios": "Si asignas un Grabador, es obligatorio adjuntar los audios correspondientes."
+                        })
 
-                # Averiguamos si la venta ya tenía audios de antes
-                ya_tiene_audios = bool(self.instance.audios.all()) if self.instance else False
-
-                # SOLO exigimos los 12 o 14 si es la primera vez que sube audios
-                if not ya_tiene_audios and cantidad_audios > 0:
+                    # Exigimos la cantidad correcta
                     if es_dni and cantidad_audios != 12:
                         raise serializers.ValidationError({
-                            "audios": f"Para la primera subida, debes enviar TODOS los audios obligatorios (12 para DNI). Has intentado subir {cantidad_audios}."
+                            "audios": f"Has asignado un grabador. Para DNI debes enviar TODOS los audios (12). Has subido {cantidad_audios}."
                         })
                     elif es_ruc and cantidad_audios != 14:
                         raise serializers.ValidationError({
-                            "audios": f"Para la primera subida, debes enviar TODOS los audios obligatorios (14 para RUC). Has intentado subir {cantidad_audios}."
+                            "audios": f"Has asignado un grabador. Para RUC debes enviar TODOS los audios (14). Has subido {cantidad_audios}."
                         })
+            else:
+                # 3.B: SI NO HAY GRABADOR
+                if cantidad_audios > 0:
+                    raise serializers.ValidationError({
+                        "id_grabador_audios": "No puedes adjuntar audios sin antes asignar un Grabador responsable."
+                    })
         return data
 
     def create(self, validated_data):
