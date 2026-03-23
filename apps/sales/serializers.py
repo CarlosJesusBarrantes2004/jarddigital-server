@@ -1,5 +1,13 @@
 from rest_framework import serializers
-from .models import EstadoSOT, SubEstadoSOT, EstadoAudio, Producto, GrabadorAudio, Venta, AudioVenta
+from .models import (
+    EstadoSOT,
+    SubEstadoSOT,
+    EstadoAudio,
+    Producto,
+    GrabadorAudio,
+    Venta,
+    AudioVenta,
+)
 from apps.users.models import SupervisorAsignacion, PermisoAcceso
 from apps.sales.models import HistorialAgendaSOT
 from apps.sales.services import crear_venta, actualizar_venta
@@ -8,77 +16,97 @@ from apps.sales.services import crear_venta, actualizar_venta
 # 1. CATÁLOGOS Y ESTADOS (Fase 1)
 # ==========================================
 
+
 class EstadoSOTSerializer(serializers.ModelSerializer):
     class Meta:
         model = EstadoSOT
-        fields = ['id', 'codigo', 'nombre', 'orden', 'es_final', 'color_hex', 'activo']
+        fields = ["id", "codigo", "nombre", "orden", "es_final", "color_hex", "activo"]
 
 
 class SubEstadoSOTSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubEstadoSOT
-        fields = ['id', 'nombre', 'color_hex', 'requiere_nueva_fecha', 'activo']
+        fields = ["id", "nombre", "color_hex", "requiere_nueva_fecha", "activo"]
 
 
 class EstadoAudioSerializer(serializers.ModelSerializer):
     class Meta:
         model = EstadoAudio
-        fields = ['id', 'codigo', 'nombre', 'activo']
+        fields = ["id", "codigo", "nombre", "activo"]
 
 
 # ==========================================
 # 2. OPERATIVOS Y PRODUCTOS (Fase 2)
 # ==========================================
 
+
 class ProductoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Producto
         fields = [
-            'id',
-            'nombre_campana',
-            'tipo_solucion',
-            'nombre_paquete',
-            'es_alto_valor',
-            'costo_fijo_plan',
-            'comision_base',
-            'fecha_inicio_vigencia',
-            'fecha_fin_vigencia',
-            'activo'
+            "id",
+            "nombre_campana",
+            "tipo_solucion",
+            "nombre_paquete",
+            "es_alto_valor",
+            "costo_fijo_plan",
+            "comision_base",
+            "fecha_inicio_vigencia",
+            "fecha_fin_vigencia",
+            "activo",
         ]
 
 
 class GrabadorAudioSerializer(serializers.ModelSerializer):
     class Meta:
         model = GrabadorAudio
-        fields = ['id', 'id_usuario', 'nombre_completo', 'activo']
+        fields = ["id", "id_usuario", "nombre_completo", "activo"]
 
 
 class AudioVentaSerializer(serializers.ModelSerializer):
     class Meta:
         model = AudioVenta
-        fields = ['id', 'nombre_etiqueta', 'url_audio', 'conforme', 'motivo', 'corregido']
+        fields = [
+            "id",
+            "nombre_etiqueta",
+            "url_audio",
+            "conforme",
+            "motivo",
+            "corregido",
+        ]
         extra_kwargs = {
-            'id': {'read_only': False, 'required': False}, # Clave para el PATCH futuro
-            'conforme': {'required': False, 'allow_null': True},
-            'motivo': {'required': False, 'allow_null': True},
-            'corregido': {'read_only': True}
+            "id": {"read_only": False, "required": False},  # Clave para el PATCH futuro
+            "conforme": {"required": False, "allow_null": True},
+            "motivo": {"required": False, "allow_null": True},
+            "corregido": {"read_only": True},
         }
 
 
 class VentaSerializer(serializers.ModelSerializer):
     # Campos visuales de solo lectura
-    nombre_asesor = serializers.CharField(source='id_asesor.nombre_completo', read_only=True)
+    nombre_asesor = serializers.CharField(
+        source="id_asesor.nombre_completo", read_only=True
+    )
 
     # Campos del producto separados
-    producto_campana = serializers.CharField(source='id_producto.nombre_campana', read_only=True)
-    producto_solucion = serializers.CharField(source='id_producto.tipo_solucion', read_only=True)
-    producto_paquete = serializers.CharField(source='id_producto.nombre_paquete', read_only=True)
+    producto_campana = serializers.CharField(
+        source="id_producto.nombre_campana", read_only=True
+    )
+    producto_solucion = serializers.CharField(
+        source="id_producto.tipo_solucion", read_only=True
+    )
+    producto_paquete = serializers.CharField(
+        source="id_producto.nombre_paquete", read_only=True
+    )
 
-    nombre_estado = serializers.CharField(source='id_estado_sot.nombre', read_only=True)
+    nombre_estado = serializers.CharField(source="id_estado_sot.nombre", read_only=True)
     codigo_estado = serializers.CharField(source="id_estado_sot.codigo", read_only=True)
-    nombre_supervisor = serializers.CharField(source='id_supervisor_vigente.id_supervisor.nombre_completo',
-                                              read_only=True)
-    codigo_tipo_documento = serializers.CharField(source="id_tipo_documento.codigo", read_only=True)
+    nombre_supervisor = serializers.CharField(
+        source="id_supervisor_vigente.id_supervisor.nombre_completo", read_only=True
+    )
+    codigo_tipo_documento = serializers.CharField(
+        source="id_tipo_documento.codigo", read_only=True
+    )
 
     # 1. Creamos un campo dinámico para el nombre final del Grabador
     grabador_real = serializers.SerializerMethodField(read_only=True)
@@ -90,33 +118,48 @@ class VentaSerializer(serializers.ModelSerializer):
     # ---> FIX #8: NUEVO CAMPO DE PARA ELIMINAR <---
     ya_reingresada = serializers.SerializerMethodField(read_only=True)
 
+    # Campos de ubigeo de instalación (solo lectura)
+    distrito_instalacion_nombre = serializers.CharField(
+        source="id_distrito_instalacion.nombre", read_only=True
+    )
+    provincia_instalacion_nombre = serializers.CharField(
+        source="id_distrito_instalacion.id_provincia.nombre", read_only=True
+    )
+    departamento_instalacion_nombre = serializers.CharField(
+        source="id_distrito_instalacion.id_provincia.id_departamento.nombre",
+        read_only=True,
+    )
+
     # ---> ¡NUEVO CAMPO ANIDADO! <---
     # El nombre de la variable "audios" DEBE coincidir con el related_name="audios" de tu models.py
     audios = AudioVentaSerializer(many=True, required=False)
 
     class Meta:
         model = Venta
-        fields = '__all__'
+        fields = "__all__"
 
         read_only_fields = [
-            'id_asesor', 'id_origen_venta', 'id_supervisor_vigente',
-            'usuario_creacion', 'fecha_creacion', 'usuario_modificacion', 'fecha_modificacion',
-            'tipo_venta'
+            "id_asesor",
+            "id_origen_venta",
+            "id_supervisor_vigente",
+            "usuario_creacion",
+            "fecha_creacion",
+            "usuario_modificacion",
+            "fecha_modificacion",
+            "tipo_venta",
         ]
 
         extra_kwargs = {
-            'id_estado_sot': {'required': False, 'allow_null': True},
-            'id_estado_audios': {'required': False},
-
+            "id_estado_sot": {"required": False, "allow_null": True},
+            "id_estado_audios": {"required": False},
             # Obligatorios para Asesor
-            'cliente_email': {'required': True, 'allow_null': False},
+            "cliente_email": {"required": True, "allow_null": False},
             "cliente_genero": {"required": True, "allow_null": False},
-            'coordenadas_gps': {'required': True, 'allow_null': False},
-            'score_crediticio': {'required': True, 'allow_null': False},
-            'fecha_venta': {'required': False, 'allow_null': True},
+            "coordenadas_gps": {"required": True, "allow_null": False},
+            "score_crediticio": {"required": True, "allow_null": False},
+            "fecha_venta": {"required": False, "allow_null": True},
             "permitir_reingreso": {"required": False},
-            'id_grabador_audios': {'required': True, 'allow_null': False},
-
+            "id_grabador_audios": {"required": True, "allow_null": False},
             # 2. Permitimos que el frontend envíe el ID de la venta origen
             "venta_origen": {"required": False, "allow_null": True},
         }
@@ -151,26 +194,30 @@ class VentaSerializer(serializers.ModelSerializer):
         Lee el atributo virtual inyectado por el Selector para evitar consultas extra.
         """
         # 1. Si la venta viene del listado (Selector), ya trae el cálculo hecho en SQL
-        if hasattr(obj, '_ya_reingresada'):
+        if hasattr(obj, "_ya_reingresada"):
             return obj._ya_reingresada
 
         # 2. Fallback de seguridad: Por si alguien consulta una sola venta
         # sin pasar por el selector (ej. justo después de crearla)
         return obj.ventas_derivadas.filter(activo=True).exists()
 
-
     def validate(self, data):
         # Extraemos el usuario al inicio para usarlo en cualquier validación (Creación o Edición)
-        request = self.context.get('request')
+        request = self.context.get("request")
         user = request.user if request else None
-        es_asesor = (user and hasattr(user, 'id_rol') and user.id_rol and user.id_rol.codigo.upper() == 'ASESOR')
+        es_asesor = (
+            user
+            and hasattr(user, "id_rol")
+            and user.id_rol
+            and user.id_rol.codigo.upper() == "ASESOR"
+        )
 
         # =======================================================
         # CANDADO ANTI-TRAMPAS PARA REINGRESOS
         # =======================================================
         # Si un asesor intenta enviarnos este campo (sea creando o editando), lo borramos silenciosamente.
-        if es_asesor and 'permitir_reingreso' in data:
-            data.pop('permitir_reingreso')
+        if es_asesor and "permitir_reingreso" in data:
+            data.pop("permitir_reingreso")
 
         # =======================================================
         # 0. CANDADOS DE SEGURIDAD Y PERMISOS (ASESOR)
@@ -179,63 +226,87 @@ class VentaSerializer(serializers.ModelSerializer):
             if es_asesor:
 
                 # Extraemos el código del estado (si no tiene, será un string vacío "")
-                estado_actual = self.instance.id_estado_sot.codigo.upper() if self.instance.id_estado_sot else ""
+                estado_actual = (
+                    self.instance.id_estado_sot.codigo.upper()
+                    if self.instance.id_estado_sot
+                    else ""
+                )
 
                 ya_tiene_audios = bool(self.instance.audios.all())
-                tiene_permiso_backoffice = getattr(self.instance, 'solicitud_correccion', False)
+                tiene_permiso_backoffice = getattr(
+                    self.instance, "solicitud_correccion", False
+                )
 
                 # --- REGLA 0: EL CANDADO DE LA MUERTE (Venta Rechazada) ---
-                if estado_actual in ['RECHAZADO', 'RECHAZADA']:
-                    raise serializers.ValidationError({
-                        "error_critico": "Esta venta ha sido RECHAZADA permanentemente. No puedes subir audios ni editarla. Debes generar una nueva venta."
-                    })
+                if estado_actual in ["RECHAZADO", "RECHAZADA"]:
+                    raise serializers.ValidationError(
+                        {
+                            "error_critico": "Esta venta ha sido RECHAZADA permanentemente. No puedes subir audios ni editarla. Debes generar una nueva venta."
+                        }
+                    )
 
                 # --- REGLA 1: PUERTA ABIERTA (0 audios en BD + Estado Permitido) ---
                 # Solo abrimos la puerta si NO tiene audios Y su estado es EJECUCION o está vacío ("")
-                if not ya_tiene_audios and estado_actual in ['EJECUCION', '']:
+                if not ya_tiene_audios and estado_actual in ["EJECUCION", ""]:
 
                     # Si la puerta está abierta pero NO le han dado permiso explícito para editar toda la venta,
                     # restringimos sus manos para que SOLO pueda tocar la llave 'audios'.
                     if not tiene_permiso_backoffice:
                         campos_enviados = set(data.keys())
-                        campos_prohibidos = [campo for campo in campos_enviados if campo != 'audios']
+                        campos_prohibidos = [
+                            campo for campo in campos_enviados if campo != "audios"
+                        ]
 
                         if campos_prohibidos:
-                            raise serializers.ValidationError({
-                                "bloqueo_parcial": f"Aún te falta subir los audios iniciales, pero NO tienes permiso para editar otros datos de la venta. Campos prohibidos detectados: {', '.join(campos_prohibidos)}"
-                            })
+                            raise serializers.ValidationError(
+                                {
+                                    "bloqueo_parcial": f"Aún te falta subir los audios iniciales, pero NO tienes permiso para editar otros datos de la venta. Campos prohibidos detectados: {', '.join(campos_prohibidos)}"
+                                }
+                            )
 
                 # --- REGLA 2: PUERTA CERRADA (Cualquier otro escenario) ---
                 else:
                     # Cayó aquí porque: o ya subió sus audios, o la venta está en un estado avanzado (ej. ATENDIDO).
                     # Exigimos SÍ O SÍ la llave del Backoffice para dejarlo pasar.
                     if not tiene_permiso_backoffice:
-                        motivo = "Los audios ya fueron subidos a nuestro sistema." if ya_tiene_audios else f"La venta se encuentra en estado {estado_actual}."
-                        raise serializers.ValidationError({
-                            "bloqueo_total": f"{motivo} Espera a que el Backoffice revise y te habilite una solicitud de corrección para poder editar."
-                        })
+                        motivo = (
+                            "Los audios ya fueron subidos a nuestro sistema."
+                            if ya_tiene_audios
+                            else f"La venta se encuentra en estado {estado_actual}."
+                        )
+                        raise serializers.ValidationError(
+                            {
+                                "bloqueo_total": f"{motivo} Espera a que el Backoffice revise y te habilite una solicitud de corrección para poder editar."
+                            }
+                        )
 
         # =======================================================
         # C. VALIDACIÓN DE VENTA ORIGEN (Regla de pertenencia)
         # =======================================================
         # Extraemos la venta origen si es que la enviaron en el JSON
-        venta_origen = data.get('venta_origen')
+        venta_origen = data.get("venta_origen")
 
         # Si enviaron una venta origen y quien está guardando es un ASESOR...
         if venta_origen and es_asesor:
             # Comparamos el ID del asesor de la venta antigua con el usuario actual
             if venta_origen.id_asesor != user:
-                raise serializers.ValidationError({
-                    "venta_origen": "Acceso denegado: Solo puedes vincular una venta origen que haya sido gestionada por ti."
-                })
+                raise serializers.ValidationError(
+                    {
+                        "venta_origen": "Acceso denegado: Solo puedes vincular una venta origen que haya sido gestionada por ti."
+                    }
+                )
 
         # =======================================================
         # D. VALIDACIÓN DE COINCIDENCIA DE MODALIDAD (Sede vs Supervisor)
         # =======================================================
         # Extraemos los datos del JSON entrante o de la base de datos si es una edición parcial (PATCH)
-        origen_venta = data.get('id_origen_venta', getattr(self.instance, 'id_origen_venta', None))
-        asignacion_supervisor = data.get('id_supervisor_vigente',
-                                            getattr(self.instance, 'id_supervisor_vigente', None))
+        origen_venta = data.get(
+            "id_origen_venta", getattr(self.instance, "id_origen_venta", None)
+        )
+        asignacion_supervisor = data.get(
+            "id_supervisor_vigente",
+            getattr(self.instance, "id_supervisor_vigente", None),
+        )
 
         if origen_venta and asignacion_supervisor:
             # Obtenemos la sede/modalidad a la que está realmente asignado el supervisor
@@ -244,92 +315,117 @@ class VentaSerializer(serializers.ModelSerializer):
 
             # Si la sede de la venta no es la misma que la sede del supervisor, bloqueamos
             if origen_venta != sede_del_supervisor:
-                raise serializers.ValidationError({
-                    "id_supervisor_vigente": "Error de seguridad: El supervisor seleccionado pertenece a una modalidad/sede distinta a la de esta venta."
-                })
+                raise serializers.ValidationError(
+                    {
+                        "id_supervisor_vigente": "Error de seguridad: El supervisor seleccionado pertenece a una modalidad/sede distinta a la de esta venta."
+                    }
+                )
 
         # =======================================================
         # E. VALIDACIÓN DE GRABADOR "OTROS" (ID 1)
         # =======================================================
-        grabador = data.get('id_grabador_audios', getattr(self.instance, 'id_grabador_audios', None))
-        nombre_externo = data.get('nombre_grabador_externo',
-                                    getattr(self.instance, 'nombre_grabador_externo', None))
+        grabador = data.get(
+            "id_grabador_audios", getattr(self.instance, "id_grabador_audios", None)
+        )
+        nombre_externo = data.get(
+            "nombre_grabador_externo",
+            getattr(self.instance, "nombre_grabador_externo", None),
+        )
 
         if grabador:
             # Si el ID del grabador es 1 (OTROS)
             if grabador.id == 1:
                 # Exigimos que el nombre externo venga lleno y no sean puros espacios
                 if not nombre_externo or str(nombre_externo).strip() == "":
-                    raise serializers.ValidationError({
-                        "nombre_grabador_externo": "Al seleccionar 'OTROS' como grabador, es obligatorio especificar el nombre de la persona."
-                    })
+                    raise serializers.ValidationError(
+                        {
+                            "nombre_grabador_externo": "Al seleccionar 'OTROS' como grabador, es obligatorio especificar el nombre de la persona."
+                        }
+                    )
             else:
                 # Si es un grabador normal de la empresa, limpiamos el campo externo por seguridad
-                if not self.instance or 'nombre_grabador_externo' in data:
-                    data['nombre_grabador_externo'] = None
+                if not self.instance or "nombre_grabador_externo" in data:
+                    data["nombre_grabador_externo"] = None
 
         # =======================================================
         # 1. VALIDACIÓN DE DOCUMENTOS Y REPRESENTANTE LEGAL
         # =======================================================
-        tipo_doc = data.get('id_tipo_documento', getattr(self.instance, 'id_tipo_documento', None))
+        tipo_doc = data.get(
+            "id_tipo_documento", getattr(self.instance, "id_tipo_documento", None)
+        )
 
         if tipo_doc:
             codigo_doc = tipo_doc.codigo.upper()
-            es_ruc = (codigo_doc == "RUC")
-            es_dni = (codigo_doc == "DNI")
+            es_ruc = codigo_doc == "RUC"
+            es_dni = codigo_doc == "DNI"
 
             # A. VALIDACIÓN DE REPRESENTANTE LEGAL (Solo RUC)
-            rep_dni = data.get('representante_legal_dni', getattr(self.instance, 'representante_legal_dni', None))
-            rep_nombre = data.get('representante_legal_nombre',
-                                  getattr(self.instance, 'representante_legal_nombre', None))
+            rep_dni = data.get(
+                "representante_legal_dni",
+                getattr(self.instance, "representante_legal_dni", None),
+            )
+            rep_nombre = data.get(
+                "representante_legal_nombre",
+                getattr(self.instance, "representante_legal_nombre", None),
+            )
 
             if es_ruc:
                 errores = {}
                 if not rep_dni:
-                    errores['representante_legal_dni'] = "El DNI del representante es obligatorio cuando es RUC."
+                    errores["representante_legal_dni"] = (
+                        "El DNI del representante es obligatorio cuando es RUC."
+                    )
                 if not rep_nombre:
-                    errores['representante_legal_nombre'] = "El nombre del representante es obligatorio cuando es RUC."
+                    errores["representante_legal_nombre"] = (
+                        "El nombre del representante es obligatorio cuando es RUC."
+                    )
 
                 if errores:
                     raise serializers.ValidationError(errores)
             else:
-                if not self.instance or 'representante_legal_dni' in data:
-                    data['representante_legal_dni'] = None
-                if not self.instance or 'representante_legal_nombre' in data:
-                    data['representante_legal_nombre'] = None
+                if not self.instance or "representante_legal_dni" in data:
+                    data["representante_legal_dni"] = None
+                if not self.instance or "representante_legal_nombre" in data:
+                    data["representante_legal_nombre"] = None
 
             # =======================================================
             # REGLA 3: AUDIOS "TODO O NADA" (Aplica en Creación y Edición)
             # =======================================================
-            audios_data = data.get('audios')
+            audios_data = data.get("audios")
 
             if audios_data is not None:
                 cantidad_audios = len(audios_data)
 
                 # Averiguamos si la venta ya tenía audios de antes
-                ya_tiene_audios = bool(self.instance.audios.all()) if self.instance else False
+                ya_tiene_audios = (
+                    bool(self.instance.audios.all()) if self.instance else False
+                )
 
                 # SOLO exigimos los 12 o 14 si es la primera vez que sube audios
                 if not ya_tiene_audios and cantidad_audios > 0:
                     if es_dni and cantidad_audios != 12:
-                        raise serializers.ValidationError({
-                            "audios": f"Para la primera subida, debes enviar TODOS los audios obligatorios (12 para DNI). Has intentado subir {cantidad_audios}."
-                        })
+                        raise serializers.ValidationError(
+                            {
+                                "audios": f"Para la primera subida, debes enviar TODOS los audios obligatorios (12 para DNI). Has intentado subir {cantidad_audios}."
+                            }
+                        )
                     elif es_ruc and cantidad_audios != 14:
-                        raise serializers.ValidationError({
-                            "audios": f"Para la primera subida, debes enviar TODOS los audios obligatorios (14 para RUC). Has intentado subir {cantidad_audios}."
-                        })
+                        raise serializers.ValidationError(
+                            {
+                                "audios": f"Para la primera subida, debes enviar TODOS los audios obligatorios (14 para RUC). Has intentado subir {cantidad_audios}."
+                            }
+                        )
         return data
 
     def create(self, validated_data):
         return crear_venta(
             datos_validados=validated_data,
-            usuario_peticion=self.context['request'].user
+            usuario_peticion=self.context["request"].user,
         )
 
     def update(self, instance, validated_data):
         return actualizar_venta(
             venta=instance,
             datos_validados=validated_data,
-            usuario_peticion=self.context['request'].user
+            usuario_peticion=self.context["request"].user,
         )
