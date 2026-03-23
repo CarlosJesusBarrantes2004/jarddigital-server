@@ -87,7 +87,12 @@ class VentaSerializer(serializers.ModelSerializer):
     codigo_sec_origen = serializers.SerializerMethodField(read_only=True)
     codigo_sot_origen = serializers.SerializerMethodField(read_only=True)
 
-    # ---> FIX #8: NUEVO CAMPO DE PARA ELIMINAR <---
+    # Campos de ubigeo de instalación (solo lectura)
+    distrito_instalacion_nombre = serializers.CharField(source='id_distrito_instalacion.nombre', read_only=True)
+    provincia_instalacion_nombre = serializers.CharField(source='id_distrito_instalacion.id_provincia.nombre', read_only=True)
+    departamento_instalacion_nombre = serializers.CharField(source='id_distrito_instalacion.id_provincia.id_departamento.nombre', read_only=True)
+
+    # ---> NUEVO CAMPO <---
     ya_reingresada = serializers.SerializerMethodField(read_only=True)
 
     # ---> ¡NUEVO CAMPO ANIDADO! <---
