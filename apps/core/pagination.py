@@ -2,7 +2,7 @@ from rest_framework.pagination import PageNumberPagination
 
 
 class PaginacionRetrocompatible(PageNumberPagination):
-    page_size = 2  # Por defecto traerá 20 registros por página
+    page_size = 10  # Por defecto traerá 10 registros por página
     page_size_query_param = (
         "page_size"  # Permite al frontend pedir más (ej. ?page=1&page_size=50)
     )
