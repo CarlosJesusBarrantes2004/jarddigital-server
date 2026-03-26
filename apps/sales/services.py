@@ -167,7 +167,7 @@ def crear_venta(*, datos_validados: dict, usuario_peticion) -> Venta:
 
     datos_validados['id_origen_venta'] = permiso_sede.id_modalidad_sede
 
-    hoy = timezone.now().date()
+    hoy = timezone.localdate()
     supervisor_activo = SupervisorAsignacion.objects.filter(
         Q(fecha_fin__isnull=True) | Q(fecha_fin__gte=hoy),
         id_modalidad_sede=permiso_sede.id_modalidad_sede,
