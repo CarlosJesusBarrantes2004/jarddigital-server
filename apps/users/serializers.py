@@ -56,7 +56,7 @@ class UsuarioAdminSerializer(SucursalesMixin, serializers.ModelSerializer):
 
     class Meta:
         model = Usuario
-        fields = ['id', 'username', 'password', 'nombre_completo', 'email', 'id_rol', 'activo', 'ids_modalidades_sede', 'sucursales']
+        fields = ['id', 'username', 'password', "celular", 'nombre_completo', 'email', 'id_rol', 'activo', 'ids_modalidades_sede', 'sucursales']
 
     # ¡Mira lo limpio que queda esto! El serializador delega el trabajo pesado al servicio.
     def create(self, validated_data):

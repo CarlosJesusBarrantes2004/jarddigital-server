@@ -68,6 +68,9 @@ class AudioVentaSerializer(serializers.ModelSerializer):
 class VentaSerializer(serializers.ModelSerializer):
     # Campos visuales de solo lectura
     nombre_asesor = serializers.CharField(source='id_asesor.nombre_completo', read_only=True)
+    celular_asesor = serializers.CharField(
+        source="id_asesor.celular", allow_null=True, read_only=True
+    )
 
     # Campos del producto separados
     producto_campana = serializers.CharField(source='id_producto.nombre_campana', read_only=True)
