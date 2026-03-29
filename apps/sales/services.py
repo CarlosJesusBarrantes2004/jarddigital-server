@@ -238,14 +238,12 @@ def actualizar_venta(*, venta: Venta, datos_validados: dict, usuario_peticion) -
             datos_validados['usuario_revision_audios'] = usuario_peticion
             datos_validados['fecha_revision_audios'] = timezone.now()
 
-            if nuevo_estado_audio.codigo.upper() == 'RECHAZADO':
-                estado_rechazado = EstadoSOT.objects.filter(codigo__iexact='RECHAZADO').first()
-                if estado_rechazado:
-                    datos_validados['id_estado_sot'] = estado_rechazado
-                if not datos_validados.get('fecha_rechazo') and not venta.fecha_rechazo:
-                    raise ValidationError({"fecha_rechazo": "Al rechazar por audio, también debe indicar la fecha."})
+            # --- NUEVA REGLA: OBSERVADO ---
+            if nuevo_estado_audio.codigo.upper() == 'OBSERVADO':
+                # Solo exigimos el motivo de la observación, ya no matamos la venta ni pedimos fecha de rechazo
                 if not datos_validados.get('observacion_audios') and not venta.observacion_audios:
-                    raise ValidationError({"observacion_audios": "Observación obligatoria al rechazar el audio."})
+                    raise ValidationError(
+                        {"observacion_audios": "Observación obligatoria al marcar los audios como OBSERVADOS."})
 
         # 2. Estampado Fecha de Venta
         if (nuevo_codigo_sot and not venta.codigo_sot) or (nuevo_codigo_sec and not venta.codigo_sec):
