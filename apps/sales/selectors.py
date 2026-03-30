@@ -9,7 +9,7 @@ def obtener_grabadores_disponibles(queryset_base: QuerySet, id_venta_actual: int
     Filtra el queryset de GrabadorAudio para devolver solo los disponibles hoy.
     Si se está editando una venta (id_venta_actual), se le da un 'Pase VIP' al grabador de esa venta.
     """
-    hoy = timezone.now().date()
+    hoy = timezone.localdate()
 
     # 1. Buscamos los ocupados hoy
     ids_bloqueados = Venta.objects.filter(

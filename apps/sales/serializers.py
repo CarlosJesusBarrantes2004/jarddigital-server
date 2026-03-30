@@ -87,7 +87,6 @@ class VentaSerializer(serializers.ModelSerializer):
     nombre_asesor = serializers.CharField(
         source="id_asesor.nombre_completo", read_only=True
     )
-
     celular_asesor = serializers.CharField(
         source="id_asesor.celular", allow_null=True, read_only=True
     )

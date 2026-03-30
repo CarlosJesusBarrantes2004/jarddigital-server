@@ -167,7 +167,7 @@ def crear_venta(*, datos_validados: dict, usuario_peticion) -> Venta:
 
     datos_validados['id_origen_venta'] = permiso_sede.id_modalidad_sede
 
-    hoy = timezone.now().date()
+    hoy = timezone.localdate()
     supervisor_activo = SupervisorAsignacion.objects.filter(
         Q(fecha_fin__isnull=True) | Q(fecha_fin__gte=hoy),
         id_modalidad_sede=permiso_sede.id_modalidad_sede,
@@ -235,17 +235,24 @@ def actualizar_venta(*, venta: Venta, datos_validados: dict, usuario_peticion) -
 
         nuevo_estado_audio = datos_validados.get('id_estado_audios')
         if nuevo_estado_audio and nuevo_estado_audio != venta.id_estado_audios:
+
+            # ---> NUEVO CANDADO DE SEGURIDAD <---
+            # Verificamos si la venta ya tiene audios o si los están subiendo en este momento
+            ya_tiene_audios = venta.audio_subido or audio_subido_flag
+            if not ya_tiene_audios:
+                raise ValidationError({
+                    "id_estado_audios": "No puedes evaluar ni observar audios porque el asesor aún no los ha subido."
+                })
+
             datos_validados['usuario_revision_audios'] = usuario_peticion
             datos_validados['fecha_revision_audios'] = timezone.now()
 
-            if nuevo_estado_audio.codigo.upper() == 'RECHAZADO':
-                estado_rechazado = EstadoSOT.objects.filter(codigo__iexact='RECHAZADO').first()
-                if estado_rechazado:
-                    datos_validados['id_estado_sot'] = estado_rechazado
-                if not datos_validados.get('fecha_rechazo') and not venta.fecha_rechazo:
-                    raise ValidationError({"fecha_rechazo": "Al rechazar por audio, también debe indicar la fecha."})
+            # --- NUEVA REGLA: OBSERVADO ---
+            if nuevo_estado_audio.codigo.upper() == 'OBSERVADO':
+                # Solo exigimos el motivo de la observación, ya no matamos la venta ni pedimos fecha de rechazo
                 if not datos_validados.get('observacion_audios') and not venta.observacion_audios:
-                    raise ValidationError({"observacion_audios": "Observación obligatoria al rechazar el audio."})
+                    raise ValidationError(
+                        {"observacion_audios": "Observación obligatoria al marcar los audios como OBSERVADOS."})
 
         # 2. Estampado Fecha de Venta
         if (nuevo_codigo_sot and not venta.codigo_sot) or (nuevo_codigo_sec and not venta.codigo_sec):
