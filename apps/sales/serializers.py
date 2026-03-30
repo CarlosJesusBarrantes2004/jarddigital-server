@@ -88,6 +88,10 @@ class VentaSerializer(serializers.ModelSerializer):
         source="id_asesor.nombre_completo", read_only=True
     )
 
+    celular_asesor = serializers.CharField(
+        source="id_asesor.celular", allow_null=True, read_only=True
+    )
+
     # Campos del producto separados
     producto_campana = serializers.CharField(
         source="id_producto.nombre_campana", read_only=True
@@ -142,9 +146,19 @@ class VentaSerializer(serializers.ModelSerializer):
     )
 
     # Campos de UBIGEO de Cliente
-    distrito_nacimiento_nombre = serializers.CharField(source="id_distrito_nacimiento.nombre", read_only=True, default=None)
-    provincia_nacimiento_nombre = serializers.CharField(source="id_distrito_nacimiento.id_provincia.nombre", read_only=True, default=None)
-    departamento_nacimiento_nombre = serializers.CharField(source="id_distrito_nacimiento.id_provincia.id_departamento.nombre", read_only=True, default=None)
+    distrito_nacimiento_nombre = serializers.CharField(
+        source="id_distrito_nacimiento.nombre", read_only=True, default=None
+    )
+    provincia_nacimiento_nombre = serializers.CharField(
+        source="id_distrito_nacimiento.id_provincia.nombre",
+        read_only=True,
+        default=None,
+    )
+    departamento_nacimiento_nombre = serializers.CharField(
+        source="id_distrito_nacimiento.id_provincia.id_departamento.nombre",
+        read_only=True,
+        default=None,
+    )
 
     # ---> NUEVO CAMPO <---
     ya_reingresada = serializers.SerializerMethodField(read_only=True)
