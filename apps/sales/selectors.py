@@ -1,5 +1,5 @@
 from django.utils import timezone
-from django.db.models import QuerySet, Exists, OuterRef
+from django.db.models import QuerySet, Exists, OuterRef, Q
 from apps.users.models import PermisoAcceso
 from .models import Venta
 
@@ -73,10 +73,16 @@ def obtener_ventas_permitidas(usuario_peticion) -> QuerySet:
     if codigo_rol == 'ASESOR':
         return queryset.filter(id_asesor=usuario_peticion)
     elif codigo_rol == 'SUPERVISOR':
+        # 1. Buscamos las sedes que supervisa HOY
         sedes_supervisadas = usuario_peticion.asignaciones_supervisor.filter(
             activo=True, fecha_fin__isnull=True
         ).values_list('id_modalidad_sede', flat=True)
-        return queryset.filter(id_origen_venta__in=sedes_supervisadas)
+
+        # 2. El Filtro Híbrido (OR)
+        return queryset.filter(
+            Q(id_origen_venta__in=sedes_supervisadas) |  # Puerta Operativa (Lo que maneja hoy)
+            Q(id_supervisor_vigente__id_supervisor=usuario_peticion)  # Puerta Histórica (Su sello personal)
+        ).distinct()  # Ponemos distinct() por si acaso alguna venta coincide en ambas reglas
     elif codigo_rol == 'BACKOFFICE':
         sedes_asignadas = PermisoAcceso.objects.filter(
             id_usuario=usuario_peticion, id_modalidad_sede__activo=True
