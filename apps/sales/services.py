@@ -172,7 +172,7 @@ def crear_venta(*, datos_validados: dict, usuario_peticion) -> Venta:
         Q(fecha_fin__isnull=True) | Q(fecha_fin__gte=hoy),
         id_modalidad_sede=permiso_sede.id_modalidad_sede,
         activo=True
-    ).first()
+    ).order_by('-id').first()
 
     if not supervisor_activo:
         raise ValidationError({"error": "La sede no tiene supervisor activo hoy."})
