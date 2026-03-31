@@ -93,7 +93,7 @@ class Command(BaseCommand):
         estados_audio = [
             {'codigo': 'CONFORME', 'nombre': 'Conforme'},
             {'codigo': 'PENDIENTE', 'nombre': 'Pendiente'},
-            {'codigo': 'RECHAZADO', 'nombre': 'Rechazado'},
+            {'codigo': 'OBSERVADO', 'nombre': 'Observado'},
         ]
         for ea in estados_audio:
             EstadoAudio.objects.get_or_create(codigo=ea['codigo'], defaults=ea)
