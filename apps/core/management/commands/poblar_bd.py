@@ -135,9 +135,15 @@ class Command(BaseCommand):
 
         # 5. POBLAR ESTADOS DE AUDIO
         estados_audio = [
+<<<<<<< HEAD
             {"codigo": "CONFORME", "nombre": "Conforme"},
             {"codigo": "PENDIENTE", "nombre": "Pendiente"},
             {"codigo": "RECHAZADO", "nombre": "Rechazado"},
+=======
+            {'codigo': 'CONFORME', 'nombre': 'Conforme'},
+            {'codigo': 'PENDIENTE', 'nombre': 'Pendiente'},
+            {'codigo': 'OBSERVADO', 'nombre': 'Observado'},
+>>>>>>> 37e117211594449cb09d9c4f424aa4d109169936
         ]
         for ea in estados_audio:
             EstadoAudio.objects.get_or_create(codigo=ea["codigo"], defaults=ea)
