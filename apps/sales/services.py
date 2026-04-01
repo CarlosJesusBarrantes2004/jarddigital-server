@@ -296,7 +296,9 @@ def actualizar_venta(*, venta: Venta, datos_validados: dict, usuario_peticion) -
                 {"id_sub_estado_sot": "El sub-estado solo se puede asignar si el SOT es 'EJECUCIÓN'."})
 
         # 5. Guardado Base
-        if usuario_peticion.id_rol and usuario_peticion.id_rol.codigo == 'ASESOR':
+        codigo_rol = usuario_peticion.id_rol.codigo.upper() if usuario_peticion.id_rol else ''
+
+        if codigo_rol in ['ASESOR', 'SUPERVISOR']:
             datos_validados['solicitud_correccion'] = False
             datos_validados['comentario_gestion'] = None
 
