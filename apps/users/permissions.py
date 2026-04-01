@@ -9,10 +9,10 @@ class EsDueño(permissions.BasePermission):
 
 
 class PuedeGestionarUsuarios(permissions.BasePermission):
-    """RRHH, Supervisor y Dueño pueden crear usuarios"""
+    """RRHH, Supervisor, Coordinador y Dueño pueden crear usuarios"""
 
     def has_permission(self, request, view):
-        roles_permitidos = ['DUENO', 'SUPERVISOR', 'RRHH']
+        roles_permitidos = ['DUENO', 'SUPERVISOR', 'COORDINADOR', 'RRHH']
         return bool(request.user.id_rol and request.user.id_rol.codigo in roles_permitidos)
 
 
@@ -52,7 +52,7 @@ class EsPropietarioVentaODueño(permissions.BasePermission):
 class SoloLecturaOCrearSiEsJefe(permissions.BasePermission):
     """
     Todos pueden hacer GET.
-    Solo DUEÑO y SUPERVISOR pueden hacer POST, PUT, PATCH, DELETE.
+    Solo DUEÑO, COORDINADOR y SUPERVISOR pueden hacer POST, PUT, PATCH, DELETE.
     """
 
     def has_permission(self, request, view):
@@ -61,7 +61,7 @@ class SoloLecturaOCrearSiEsJefe(permissions.BasePermission):
             return True
 
         # Si es un POST o DELETE, verificamos que sea jefe
-        roles_jefes = ['DUENO', 'SUPERVISOR']
+        roles_jefes = ['DUENO', 'COORDINADOR', 'SUPERVISOR']
         return bool(request.user.id_rol and request.user.id_rol.codigo in roles_jefes)
 
 
