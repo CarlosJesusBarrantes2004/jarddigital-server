@@ -20,7 +20,10 @@ def generar_excel_ventas(fecha_inicio: str = None, fecha_fin: str = None, estado
 
 
     if fecha_inicio and fecha_fin:
-        ventas_base = ventas_base.filter(fecha_venta__range=[fecha_inicio, fecha_fin])
+        ventas_base = ventas_base.filter(
+            fecha_venta__date__gte=fecha_inicio,
+            fecha_venta__date__lte=fecha_fin
+        )
 
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
