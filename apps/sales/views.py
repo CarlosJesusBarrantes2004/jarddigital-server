@@ -6,7 +6,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .filters import VentaFilter
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
-
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 # Importamos tu papelera de reciclaje y tus aduanas
 from apps.core.mixins import SoftDeleteModelViewSet
 from apps.users.permissions import SoloLecturaOCrearSiEsJefe
@@ -49,6 +50,7 @@ class SubEstadoSOTViewSet(SoftDeleteModelViewSet):
     search_fields = ['nombre']
 
 
+@method_decorator(cache_page(60 * 60 * 2), name='dispatch')
 class EstadoAudioViewSet(SoftDeleteModelViewSet):
     queryset = EstadoAudio.objects.all()
     serializer_class = EstadoAudioSerializer
