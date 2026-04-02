@@ -50,8 +50,30 @@ def obtener_ventas_permitidas(usuario_peticion) -> QuerySet:
         activo=True
     )
 
-    # 1. Optimización Base (SQL JOINs + Anotaciones)
-    queryset = Venta.objects.all()
+    # ---> Balanceo de Carga entre SQL y Python <---
+    queryset = Venta.objects.select_related(
+        # 1. Select Related: SOLO relaciones directas (1 salto) vitales para pintar la tabla
+        'id_asesor',
+        'id_producto',
+        'id_estado_sot',
+        'id_sub_estado_sot',
+        'id_estado_audios',
+        'id_tipo_documento',
+        'venta_origen'
+    ).prefetch_related(
+        # 2. Prefetch Related: Relaciones profundas (2+ saltos) y Múltiples
+        'id_origen_venta__id_sucursal',
+        'id_origen_venta__id_modalidad',
+        'id_supervisor_vigente__id_supervisor',
+        'id_distrito_nacimiento__id_provincia__id_departamento',
+        'id_distrito_instalacion__id_provincia__id_departamento',
+        'id_grabador_audios',
+        'usuario_revision_audios',
+        'audios'
+    ).annotate(
+        # 3. Anotaciones
+        _ya_reingresada=Exists(reingresos_activos)
+    ).all()
 
     # 2. Seguridad de Datos (Tenant Isolation)
     if not (hasattr(usuario_peticion, 'id_rol') and usuario_peticion.id_rol):
