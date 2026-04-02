@@ -20,7 +20,10 @@ def generar_excel_ventas(fecha_inicio: str = None, fecha_fin: str = None, estado
 
 
     if fecha_inicio and fecha_fin:
-        ventas_base = ventas_base.filter(fecha_venta__range=[fecha_inicio, fecha_fin])
+        ventas_base = ventas_base.filter(
+            fecha_venta__date__gte=fecha_inicio,
+            fecha_venta__date__lte=fecha_fin
+        )
 
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
@@ -293,7 +296,9 @@ def actualizar_venta(*, venta: Venta, datos_validados: dict, usuario_peticion) -
                 {"id_sub_estado_sot": "El sub-estado solo se puede asignar si el SOT es 'EJECUCIÓN'."})
 
         # 5. Guardado Base
-        if usuario_peticion.id_rol and usuario_peticion.id_rol.codigo == 'ASESOR':
+        codigo_rol = usuario_peticion.id_rol.codigo.upper() if usuario_peticion.id_rol else ''
+
+        if codigo_rol in ['ASESOR', 'SUPERVISOR', 'COORDINADOR']:
             datos_validados['solicitud_correccion'] = False
             datos_validados['comentario_gestion'] = None
 

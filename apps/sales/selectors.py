@@ -70,6 +70,9 @@ def obtener_ventas_permitidas(usuario_peticion) -> QuerySet:
 
     codigo_rol = usuario_peticion.id_rol.codigo.upper()
 
+    if codigo_rol in ['COORDINADOR', 'DUENO']:
+        return queryset
+
     if codigo_rol == 'ASESOR':
         return queryset.filter(id_asesor=usuario_peticion)
     elif codigo_rol == 'SUPERVISOR':

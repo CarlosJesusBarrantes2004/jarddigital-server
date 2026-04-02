@@ -5,6 +5,7 @@ from apps.sales.serializers import VentaSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import VentaFilter
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 
 # Importamos tu papelera de reciclaje y tus aduanas
 from apps.core.mixins import SoftDeleteModelViewSet
@@ -114,6 +115,17 @@ class VentaViewSet(SoftDeleteModelViewSet):
     def get_queryset(self):
         # 1. Delegamos toda la lógica de RLS y Joins al Selector
         return obtener_ventas_permitidas(self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        # ---> EL CANDADO PARA SUPERVISORES <---
+        # Verificamos si el usuario tiene rol y si ese rol es SUPERVISOR o COORDINADOR
+        if request.user.id_rol and request.user.id_rol.codigo.upper() in ['SUPERVISOR', 'COORDINADOR']:
+            raise PermissionDenied({
+                "error": "Operación denegada. Los supervisores y coordinadores solo pueden auditar y editar ventas, no crearlas."
+            })
+
+        # Si es Asesor o Backoffice, dejamos que DRF siga su flujo normal de creación
+        return super().create(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'])
     def exportar_excel(self, request):
