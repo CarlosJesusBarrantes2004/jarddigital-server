@@ -59,9 +59,6 @@ def obtener_ventas_permitidas(usuario_peticion) -> QuerySet:
         'usuario_revision_audios', 'venta_origen'
     ).prefetch_related(
         'audios'
-    ).annotate(
-        # Inyectamos el resultado de la subconsulta como un atributo virtual llamado '_ya_reingresada'
-        _ya_reingresada=Exists(reingresos_activos)
     ).all()
 
     # 2. Seguridad de Datos (Tenant Isolation)
