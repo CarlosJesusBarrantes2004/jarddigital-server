@@ -51,15 +51,7 @@ def obtener_ventas_permitidas(usuario_peticion) -> QuerySet:
     )
 
     # 1. Optimización Base (SQL JOINs + Anotaciones)
-    queryset = Venta.objects.select_related(
-        'id_asesor', 'id_origen_venta__id_sucursal', 'id_origen_venta__id_modalidad',
-        'id_supervisor_vigente__id_supervisor', 'id_producto', 'id_tipo_documento',
-        'id_distrito_nacimiento__id_provincia__id_departamento', 'id_distrito_instalacion__id_provincia__id_departamento', 'id_sub_estado_sot',
-        'id_estado_sot', 'id_grabador_audios', 'id_estado_audios',
-        'usuario_revision_audios', 'venta_origen'
-    ).prefetch_related(
-        'audios'
-    ).all()
+    queryset = Venta.objects.all()
 
     # 2. Seguridad de Datos (Tenant Isolation)
     if not (hasattr(usuario_peticion, 'id_rol') and usuario_peticion.id_rol):
