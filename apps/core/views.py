@@ -4,7 +4,10 @@ from .mixins import SoftDeleteModelViewSet # Importamos el superpoder
 from .models import Sucursal, Modalidad, TipoDocumento, ModalidadSede
 from .serializers import SucursalSerializer, ModalidadSerializer, TipoDocumentoSerializer, ModalidadSedeOpcionesSerializer
 from .permissions import SoloLecturaModificarJefaturas
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 
+@method_decorator(cache_page(60 * 60 * 2), name='dispatch')
 class SucursalViewSet(SoftDeleteModelViewSet):
     # Optimizamos la consulta para que traiga las relaciones puente y las modalidades de golpe
     queryset = Sucursal.objects.prefetch_related(
@@ -14,6 +17,7 @@ class SucursalViewSet(SoftDeleteModelViewSet):
     serializer_class = SucursalSerializer
     permission_classes = [IsAuthenticated, SoloLecturaModificarJefaturas]
 
+@method_decorator(cache_page(60 * 60 * 2), name='dispatch')
 class ModalidadViewSet(SoftDeleteModelViewSet):
     # Cambiamos el .filter() por .all() igual que arriba
     queryset = Modalidad.objects.all()

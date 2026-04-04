@@ -50,17 +50,28 @@ def obtener_ventas_permitidas(usuario_peticion) -> QuerySet:
         activo=True
     )
 
-    # 1. Optimización Base (SQL JOINs + Anotaciones)
+    # ---> Balanceo de Carga entre SQL y Python <---
     queryset = Venta.objects.select_related(
-        'id_asesor', 'id_origen_venta__id_sucursal', 'id_origen_venta__id_modalidad',
-        'id_supervisor_vigente__id_supervisor', 'id_producto', 'id_tipo_documento',
-        'id_distrito_nacimiento__id_provincia__id_departamento', 'id_distrito_instalacion__id_provincia__id_departamento', 'id_sub_estado_sot',
-        'id_estado_sot', 'id_grabador_audios', 'id_estado_audios',
-        'usuario_revision_audios', 'venta_origen'
+        # 1. Select Related: SOLO relaciones directas (1 salto) vitales para pintar la tabla
+        'id_asesor',
+        'id_producto',
+        'id_estado_sot',
+        'id_sub_estado_sot',
+        'id_estado_audios',
+        'id_tipo_documento',
+        'venta_origen'
     ).prefetch_related(
+        # 2. Prefetch Related: Relaciones profundas (2+ saltos) y Múltiples
+        'id_origen_venta__id_sucursal',
+        'id_origen_venta__id_modalidad',
+        'id_supervisor_vigente__id_supervisor',
+        'id_distrito_nacimiento__id_provincia__id_departamento',
+        'id_distrito_instalacion__id_provincia__id_departamento',
+        'id_grabador_audios',
+        'usuario_revision_audios',
         'audios'
     ).annotate(
-        # Inyectamos el resultado de la subconsulta como un atributo virtual llamado '_ya_reingresada'
+        # 3. Anotaciones
         _ya_reingresada=Exists(reingresos_activos)
     ).all()
 

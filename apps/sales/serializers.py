@@ -332,15 +332,49 @@ class VentaSerializer(serializers.ModelSerializer):
         # Extraemos la venta origen si es que la enviaron en el JSON
         venta_origen = data.get("venta_origen")
 
-        # Si enviaron una venta origen y quien está guardando es un ASESOR...
-        if venta_origen and es_asesor:
-            # Comparamos el ID del asesor de la venta antigua con el usuario actual
-            if venta_origen.id_asesor != user:
-                raise serializers.ValidationError(
-                    {
-                        "venta_origen": "Acceso denegado: Solo puedes vincular una venta origen que haya sido gestionada por ti."
-                    }
-                )
+        if venta_origen:
+            # --- 1. REGLA DE PERTENENCIA ---
+            # Si quien está guardando es un ASESOR...
+            if es_asesor:
+                if venta_origen.id_asesor != user:
+                    raise serializers.ValidationError(
+                        {
+                            "venta_origen": "Acceso denegado: Solo puedes vincular una venta origen que haya sido gestionada por ti."
+                        }
+                    )
+
+            # --- 2. REGLA ANTI-FRAUDE DE GRABADOR (Reingresos) ---
+            # Extraemos el DNI y Grabador entrantes (o los actuales si es un PATCH)
+            nuevo_doc = data.get(
+                "cliente_numero_doc", getattr(self.instance, "cliente_numero_doc", None)
+            )
+            nuevo_grabador = data.get(
+                "id_grabador_audios", getattr(self.instance, "id_grabador_audios", None)
+            )
+
+            viejo_doc = venta_origen.cliente_numero_doc
+            viejo_grabador = venta_origen.id_grabador_audios
+
+            # Validamos los escenarios de reingreso (solo si enviaron un DNI para evaluar)
+            if nuevo_doc and viejo_doc:
+
+                # Escenario A: El cliente es el mismo
+                if nuevo_doc == viejo_doc:
+                    if viejo_grabador and nuevo_grabador != viejo_grabador:
+                        raise serializers.ValidationError(
+                            {
+                                "id_grabador_audios": "Regla de Reingreso: Como el Documento es idéntico a la venta original, debes mantener el mismo Grabador de Audio."
+                            }
+                        )
+
+                # Escenario B: El cliente ha cambiado
+                else:
+                    if viejo_grabador and nuevo_grabador == viejo_grabador:
+                        raise serializers.ValidationError(
+                            {
+                                "id_grabador_audios": "Regla de Reingreso: El Documento ha cambiado. Por seguridad anti-fraude, no puedes reutilizar el grabador de audio de la venta anterior."
+                            }
+                        )
 
         # =======================================================
         # D. VALIDACIÓN DE COINCIDENCIA DE MODALIDAD (Sede vs Supervisor)
