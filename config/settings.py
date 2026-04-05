@@ -21,21 +21,27 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # 1. Inicializamos environ y leemos el archivo .env
 env = environ.Env()
-environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-_=)%*by7&zy7_y34ato5&=r2avx@7b!a)3^&%&h%o&6)(c$o^s")
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY", "django-insecure-_=)%*by7&zy7_y34ato5&=r2avx@7b!a)3^&%&h%o&6)(c$o^s"
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = 'RENDER' not in os.environ
+DEBUG = "RENDER" not in os.environ
 
-ALLOWED_HOSTS = []
-RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-if RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+# --- NUEVO CÓDIGO ---
+ALLOWED_HOSTS = ["*"]  # Para simplificar en Coolify momentáneamente, o leer de env
+ALLOWED_HOSTS_ENV = os.environ.get("ALLOWED_HOSTS")
+if ALLOWED_HOSTS_ENV:
+    ALLOWED_HOSTS.extend(ALLOWED_HOSTS_ENV.split(","))
+else:
+    ALLOWED_HOSTS.extend(["api.jarddigital.com", "localhost", "127.0.0.1"])
+# --------------------
 
 # Application definition
 
@@ -106,9 +112,9 @@ DATABASES = {
 }
 
 # Si estamos en producción (Render), sobrescribimos la base de datos local con la de la nube
-DATABASE_URL = os.environ.get('DATABASE_URL')
+DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
-    DATABASES['default'] = dj_database_url.config(
+    DATABASES["default"] = dj_database_url.config(
         default=DATABASE_URL,
         conn_max_age=600,
         conn_health_checks=True,
@@ -150,10 +156,10 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 # Esta es la carpeta donde Django agrupará todos los archivos estáticos en producción
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 # Opcional pero recomendado: habilita la compresión y el cacheo de WhiteNoise
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -181,14 +187,27 @@ SPECTACULAR_SETTINGS = {
 }
 
 # Detectamos si estamos en la nube
-ES_PRODUCCION = 'RENDER' in os.environ  # o 'DATABASE_URL' in os.environ
+# --- NUEVO CÓDIGO ---
+# Detectamos si estamos en la nube
+ES_PRODUCCION = (
+    "RENDER" in os.environ
+    or "COOLIFY_URL" in os.environ
+    or "DATABASE_URL" in os.environ
+)
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "https://jarddigital-client.vercel.app",
     "http://localhost:5173",
     "http://localhost:3000",
+    "https://crm.jarddigital.com",
+    "https://ventas.jarddigital.com",
 ]
+
+CORS_ALLOWED_ORIGINS_ENV = os.environ.get("CORS_ALLOWED_ORIGINS")
+if CORS_ALLOWED_ORIGINS_ENV:
+    CORS_ALLOWED_ORIGINS.extend(CORS_ALLOWED_ORIGINS_ENV.split(","))
+# --------------------
 
 # --- 1. TU COOKIE DE AUTENTICACIÓN PERSONALIZADA ---
 AUTH_COOKIE = "access_token"
