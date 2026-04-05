@@ -201,7 +201,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:3000",
     "https://crm.jarddigital.com",
-    "https://ventas.jarddigital.com",
+    "https://crm.jarddigital.com",
 ]
 
 CORS_ALLOWED_ORIGINS_ENV = os.environ.get("CORS_ALLOWED_ORIGINS")
