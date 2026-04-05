@@ -31,17 +31,20 @@ SECRET_KEY = os.environ.get(
     "SECRET_KEY", "django-insecure-_=)%*by7&zy7_y34ato5&=r2avx@7b!a)3^&%&h%o&6)(c$o^s"
 )
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = "RENDER" not in os.environ
+# Detectamos si estamos en producción (Coolify pone RENDER=True como variable de entorno)
+ES_PRODUCCION = "RENDER" in os.environ
 
-# --- NUEVO CÓDIGO ---
-ALLOWED_HOSTS = ["*"]  # Para simplificar en Coolify momentáneamente, o leer de env
-ALLOWED_HOSTS_ENV = os.environ.get("ALLOWED_HOSTS")
-if ALLOWED_HOSTS_ENV:
-    ALLOWED_HOSTS.extend(ALLOWED_HOSTS_ENV.split(","))
-else:
-    ALLOWED_HOSTS.extend(["api.jarddigital.com", "localhost", "127.0.0.1"])
-# --------------------
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = not ES_PRODUCCION
+
+# Hosts permitidos
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+if ES_PRODUCCION:
+    ALLOWED_HOSTS += [
+        "api.jarddigital.com",
+        "crm.jarddigital.com",
+        "ventas.jarddigital.com",
+    ]
 
 # Application definition
 
@@ -111,7 +114,7 @@ DATABASES = {
     }
 }
 
-# Si estamos en producción (Render), sobrescribimos la base de datos local con la de la nube
+# Si estamos en producción, sobrescribimos la base de datos local con la de la nube
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
     DATABASES["default"] = dj_database_url.config(
@@ -186,28 +189,21 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
 }
 
-# Detectamos si estamos en la nube
-# --- NUEVO CÓDIGO ---
-# Detectamos si estamos en la nube
-ES_PRODUCCION = (
-    "RENDER" in os.environ
-    or "COOLIFY_URL" in os.environ
-    or "DATABASE_URL" in os.environ
-)
-
+# ─── CORS ────────────────────────────────────────────────────────────────────
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "https://jarddigital-client.vercel.app",
+    "https://crm.jarddigital.com",
+    "https://ventas.jarddigital.com",
     "http://localhost:5173",
     "http://localhost:3000",
-    "https://crm.jarddigital.com",
-    "https://crm.jarddigital.com",
 ]
 
-CORS_ALLOWED_ORIGINS_ENV = os.environ.get("CORS_ALLOWED_ORIGINS")
-if CORS_ALLOWED_ORIGINS_ENV:
-    CORS_ALLOWED_ORIGINS.extend(CORS_ALLOWED_ORIGINS_ENV.split(","))
-# --------------------
+# Necesario para que Django sepa que está detrás de Traefik/Coolify (HTTPS)
+if ES_PRODUCCION:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# ─── COOKIES ─────────────────────────────────────────────────────────────────
 
 # --- 1. TU COOKIE DE AUTENTICACIÓN PERSONALIZADA ---
 AUTH_COOKIE = "access_token"
@@ -215,13 +211,14 @@ AUTH_COOKIE_HTTP_ONLY = True
 AUTH_COOKIE_SECURE = ES_PRODUCCION
 AUTH_COOKIE_SAMESITE = "None" if ES_PRODUCCION else "Lax"
 
-# --- 2. COOKIES INTERNAS DE DJANGO (Lo que sugirió el otro agente) ---
+# --- 2. COOKIES INTERNAS DE DJANGO ---
 SESSION_COOKIE_SECURE = ES_PRODUCCION
 SESSION_COOKIE_SAMESITE = "None" if ES_PRODUCCION else "Lax"
 
 CSRF_COOKIE_SECURE = ES_PRODUCCION
 CSRF_COOKIE_SAMESITE = "None" if ES_PRODUCCION else "Lax"
 
+# ─── JWT ──────────────────────────────────────────────────────────────────────
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=8),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
