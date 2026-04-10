@@ -1,7 +1,9 @@
 from django.db import transaction
+from django.utils import timezone
 from .models import Usuario, PermisoAcceso
 # Importamos el modelo de GrabadorAudio
 from apps.sales.models import GrabadorAudio
+from apps.users.models import SupervisorAsignacion
 
 def _sincronizar_grabador(usuario: Usuario):
     """
@@ -46,6 +48,11 @@ def actualizar_usuario_admin(*, usuario: Usuario, datos_validados: dict) -> Usua
     ids_sedes = datos_validados.pop('ids_modalidades_sede', None)
     password = datos_validados.pop('password', None)
 
+    # ---> DETECCIÓN TEMPRANA <---
+    # Revisamos si el usuario ESTABA activo y en este request lo están apagando
+    estaba_activo = usuario.activo
+    se_esta_desactivando = estaba_activo and datos_validados.get('activo') == False
+
     with transaction.atomic():
         for attr, value in datos_validados.items():
             setattr(usuario, attr, value)
@@ -61,7 +68,17 @@ def actualizar_usuario_admin(*, usuario: Usuario, datos_validados: dict) -> Usua
                 permisos = [PermisoAcceso(id_usuario=usuario, id_modalidad_sede_id=mod_id) for mod_id in ids_sedes]
                 PermisoAcceso.objects.bulk_create(permisos)
 
-        # ---> INYECCIÓN DE LÓGICA: Sincronizamos el grabador explícitamente <---
+        # Sincronizamos el grabador explícitamente
         _sincronizar_grabador(usuario)
+
+        # ---> INYECCIÓN ASUNTO 1: Cerrar los contratos de supervisor <---
+        if se_esta_desactivando:
+            SupervisorAsignacion.objects.filter(
+                id_supervisor=usuario,
+                activo=True
+            ).update(
+                activo=False,
+                fecha_fin=timezone.now().date()
+            )
 
     return usuario
