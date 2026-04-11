@@ -379,27 +379,31 @@ class VentaSerializer(serializers.ModelSerializer):
         # =======================================================
         # D. VALIDACIÓN DE COINCIDENCIA DE MODALIDAD (Sede vs Supervisor)
         # =======================================================
+        # ---> OPERACIONES SOLICITÓ FLEXIBILIDAD (ABRIL 2026) <---
+        # Se comenta esta validación para permitir que una venta de una Sede 'A'
+        # pueda ser supervisada por un Jefe de una Sede 'B' (Reasignaciones manuales).
         # Extraemos los datos del JSON entrante o de la base de datos si es una edición parcial (PATCH)
-        origen_venta = data.get(
-            "id_origen_venta", getattr(self.instance, "id_origen_venta", None)
-        )
-        asignacion_supervisor = data.get(
-            "id_supervisor_vigente",
-            getattr(self.instance, "id_supervisor_vigente", None),
-        )
 
-        if origen_venta and asignacion_supervisor:
+        #origen_venta = data.get(
+        #    "id_origen_venta", getattr(self.instance, "id_origen_venta", None)
+        #)
+        #asignacion_supervisor = data.get(
+        #    "id_supervisor_vigente",
+        #    getattr(self.instance, "id_supervisor_vigente", None),
+        #)
+
+        #if origen_venta and asignacion_supervisor:
             # Obtenemos la sede/modalidad a la que está realmente asignado el supervisor
             # (Ajusta 'id_modalidad_sede' si tu modelo de asignación lo llama de otra forma)
-            sede_del_supervisor = asignacion_supervisor.id_modalidad_sede
+        #    sede_del_supervisor = asignacion_supervisor.id_modalidad_sede
 
             # Si la sede de la venta no es la misma que la sede del supervisor, bloqueamos
-            if origen_venta != sede_del_supervisor:
-                raise serializers.ValidationError(
-                    {
-                        "id_supervisor_vigente": "Error de seguridad: El supervisor seleccionado pertenece a una modalidad/sede distinta a la de esta venta."
-                    }
-                )
+        #    if origen_venta != sede_del_supervisor:
+        #        raise serializers.ValidationError(
+        #            {
+        #                "id_supervisor_vigente": "Error de seguridad: El supervisor seleccionado pertenece a una modalidad/sede distinta a la de esta venta."
+        #            }
+        #        )
 
         # =======================================================
         # E. VALIDACIÓN DE GRABADOR "OTROS" (ID 1)
