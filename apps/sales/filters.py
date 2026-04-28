@@ -40,6 +40,26 @@ class VentaFilter(django_filters.FilterSet):
         field_name="solicitud_correccion"
     )
 
+    # ---> NUEVOS FILTROS PARA EL MÓDULO DE SEGUIMIENTO <---
+    # 1. Filtro de Género (Ej: ?genero=M o ?genero=F)
+    genero = django_filters.CharFilter(
+        field_name="cliente_genero",
+        lookup_expr="iexact"
+    )
+
+    # 2. Filtro del Mes de Instalación (Ej: ?mes_instalacion=9 para Septiembre)
+    mes_instalacion = django_filters.NumberFilter(
+        field_name="fecha_real_inst",  # Asumo este campo por el JSON que me mostraste antes
+        lookup_expr="month"
+    )
+
+    # (Opcional Arquitectónico): Te recomiendo agregar el año también,
+    # si no, el próximo año el mes "9" traerá los de 2026 y 2027 mezclados.
+    anio_instalacion = django_filters.NumberFilter(
+        field_name="fecha_real_inst",
+        lookup_expr="year"
+    )
+
     class Meta:
         model = Venta
         fields = [
@@ -55,4 +75,7 @@ class VentaFilter(django_filters.FilterSet):
             "tecnologia",
             "es_full_claro",
             "solicitud_correccion",
+            "genero",
+            "mes_instalacion",
+            "anio_instalacion",
         ]

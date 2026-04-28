@@ -102,5 +102,17 @@ def obtener_ventas_permitidas(usuario_peticion) -> QuerySet:
             id_usuario=usuario_peticion, id_modalidad_sede__activo=True
         ).values_list('id_modalidad_sede', flat=True)
         return queryset.filter(id_origen_venta__in=sedes_asignadas)
+    elif codigo_rol == 'SEGUIMIENTO':
+        # 1. Buscamos sus sedes asignadas (Igual que Backoffice)
+        sedes_asignadas = PermisoAcceso.objects.filter(
+            id_usuario=usuario_peticion, id_modalidad_sede__activo=True
+        ).values_list('id_modalidad_sede', flat=True)
+
+        # 2. Retornamos SOLO las ventas de sus sedes Y que estén ATENDIDAS
+        # (Usamos iexact para curarnos en salud si en la BD dice "Atendido" o "ATENDIDO")
+        return queryset.filter(
+            id_origen_venta__in=sedes_asignadas,
+            id_estado_sot__codigo__iexact='ATENDIDO'
+        )
 
     return queryset
