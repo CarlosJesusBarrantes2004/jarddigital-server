@@ -9,6 +9,8 @@ from apps.users.models import PermisoAcceso
 from rest_framework.exceptions import ValidationError
 from .models import Venta, AudioVenta, EstadoAudio, EstadoSOT, SupervisorAsignacion, HistorialAgendaSOT
 from .selectors import obtener_ventas_permitidas
+from apps.tracking.models import Seguimiento, SeguimientoMensual
+from apps.tracking.utils_seguimiento import generar_fechas_proyectadas
 
 
 def generar_excel_ventas(fecha_inicio: str = None, fecha_fin: str = None, estado_filtro: str = None, usuario_peticion=None) -> HttpResponse:
@@ -305,6 +307,50 @@ def actualizar_venta(*, venta: Venta, datos_validados: dict, usuario_peticion) -
         for attr, value in datos_validados.items():
             setattr(venta, attr, value)
         venta.save()
+
+        # =========================================================
+        # 5.1 ---> GATILLO DEL MÓDULO DE SEGUIMIENTO  <---
+        # =========================================================
+        # Verificamos si la venta pasó a estado ATENDIDO
+        if estado_destino and estado_destino.codigo.upper() == 'ATENDIDO':
+
+            # Verificamos que la venta NO tenga ya un seguimiento creado
+            # (para no duplicar si le hacen PATCH estando ya en ATENDIDO)
+            if not hasattr(venta, 'seguimiento'):
+
+                # OJO: fecha_real_inst es DateTimeField, necesitamos extraer solo la fecha (date)
+                # para pasárselo a nuestro motor
+                fecha_inst_limpia = venta.fecha_real_inst.date()
+
+                # 1. Llamamos a la magia de nuestro motor de fechas
+                paquete_fechas = generar_fechas_proyectadas(fecha_real_instalacion=fecha_inst_limpia)
+
+                # 2. Creamos la cabecera (Seguimiento)
+                nuevo_seguimiento = Seguimiento.objects.create(
+                    id_venta=venta,
+                    ciclo_facturacion=paquete_fechas["ciclo_facturacion"],
+                    # Iniciamos sin estado (null), como acordamos para evitar falsos "PENALIZADOS" al inicio
+                )
+
+                # 3. Preparamos el Bulk Insert de los 6 meses (Rendimiento Extremo)
+                registros_mensuales = []
+                for mes_data in paquete_fechas["meses_detalle"]:
+                    registros_mensuales.append(
+                        SeguimientoMensual(
+                            id_seguimiento=nuevo_seguimiento,
+                            mes_numero=mes_data["mes_numero"],
+                            fecha_seguimiento=mes_data["fecha_seguimiento"],
+                            fecha_validacion_pago=mes_data["fecha_validacion_pago"],
+                            # pago_cliente_realizado nace en False por el default del modelo
+                        )
+                    )
+
+                # 4. Inyectamos los 6 registros de golpe a la BD
+                SeguimientoMensual.objects.bulk_create(registros_mensuales)
+
+        # =========================================================
+        # FIN DEL GATILLO DE SEGUIMIENTO
+        # =========================================================
 
         # 6. Actualización Anidada de Audios
         if audios_data is not None:

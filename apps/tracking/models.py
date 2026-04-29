@@ -31,6 +31,9 @@ class Seguimiento(models.Model):
     )
     descuento_realizado = models.BooleanField(default=False)
 
+    # ---> INYECCIÓN ETAPA 1: Flag de Recálculo <---
+    ciclo_modificado_manualmente = models.BooleanField(default=False)
+
     class Meta:
         db_table = "seguimiento"
 
