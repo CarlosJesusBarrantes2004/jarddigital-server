@@ -1,39 +1,46 @@
 from rest_framework.exceptions import ValidationError
-from .models import SeguimientoMensual
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
-from .models import Seguimiento
+from .models import Seguimiento, SeguimientoMensual
 
 
 def recalcular_fechas_por_nuevo_ciclo(seguimiento: Seguimiento, nuevo_ciclo):
     """
     Recalcula y actualiza los 6 meses existentes en la base de datos
-    usando un nuevo ciclo de facturación como base.
+    usando un nuevo ciclo de facturación como base de manera optimizada.
     """
     # Obtenemos los meses ordenados del 1 al 6
     meses = list(seguimiento.meses_evaluados.order_by('mes_numero'))
     if not meses: return
 
-    # --- Mes 1 (Depende directamente del ciclo) ---[cite: 1]
+    # --- Mes 1 (Depende directamente del ciclo) ---
     m1 = meses[0]
     m1.fecha_seguimiento = nuevo_ciclo + timedelta(days=10)
     m1.fecha_validacion_pago = nuevo_ciclo + timedelta(days=20)
-    m1.save()
+
+    # Ya no hacemos m1.save() aquí
 
     base_fecha_val = m1.fecha_validacion_pago
 
-    # --- Meses 2 al 6 (Regla EOM Iterativa) ---[cite: 1]
+    # --- Meses 2 al 6 (Regla EOM Iterativa y Autónoma) ---
     for i in range(1, len(meses)):  # Índices 1 al 5 (Meses 2 al 6)
         mes_actual = meses[i]
-        mes_anterior = meses[i - 1]
 
-        # Proyección exacta amarrada a la base del Mes 1
+        # 1. Proyección de Validación amarrada a la base (Mes N - 1)
         nueva_fecha_val = base_fecha_val + relativedelta(months=mes_actual.mes_numero - 1)
-        nueva_fecha_seg = mes_anterior.fecha_validacion_pago + timedelta(days=15)
+
+        # 2. Proyección de Seguimiento amarrada a la base (Mes N - 2) + 15 días
+        # Esto reemplaza a: mes_anterior.fecha_validacion_pago + timedelta(days=15)
+        nueva_fecha_seg = base_fecha_val + relativedelta(months=mes_actual.mes_numero - 2) + timedelta(days=15)
 
         mes_actual.fecha_validacion_pago = nueva_fecha_val
         mes_actual.fecha_seguimiento = nueva_fecha_seg
-        mes_actual.save()
+
+    # Rematamos con la optimización que hicimos hace un momento
+    SeguimientoMensual.objects.bulk_update(
+        meses,
+        fields=['fecha_seguimiento', 'fecha_validacion_pago']
+    )
 
 
 def actualizar_seguimiento_mensual(*, mes_instance: SeguimientoMensual, datos_validados: dict,
