@@ -1,33 +1,38 @@
 from rest_framework import serializers
 from .models import Seguimiento, SeguimientoMensual
+from apps.sales.serializers import VentaSerializer
 
+class VentaParaSeguimientoSerializer(VentaSerializer):
+    """
+    Hereda TODO del VentaSerializer original, pero anulamos
+    los audios anidados para que el JSON no pese una tonelada.
+    """
+    # Excelente truco: DRF ignorará este campo en la renderización
+    audios = None
+
+    class Meta(VentaSerializer.Meta):
+        pass
 
 class SeguimientoMensualSerializer(serializers.ModelSerializer):
     class Meta:
         model = SeguimientoMensual
-        # Exponemos todos los campos útiles. 'id_seguimiento' no es necesario
-        # enviarlo porque va implícito en la URL o en el objeto padre.
         fields = [
             'id', 'mes_numero', 'pago_cliente_realizado',
             'fecha_seguimiento', 'fecha_validacion_pago',
             'observacion', 'conformidad', 'activo'
         ]
-        read_only_fields = ['id', 'mes_numero', 'fecha_seguimiento', 'fecha_validacion_pago']
-
+        read_only_fields = ['id', 'mes_numero']
 
 class SeguimientoSerializer(serializers.ModelSerializer):
-    # Anidamos los meses usando el related_name que definimos en el modelo
     meses_evaluados = SeguimientoMensualSerializer(many=True, read_only=True)
-
-    # Datos de solo lectura que vienen de la Venta (para comodidad del frontend)
-    codigo_sot = serializers.CharField(source='id_venta.codigo_sot', read_only=True)
-    cliente_nombre = serializers.CharField(source='id_venta.cliente_nombre', read_only=True)
+    venta = VentaParaSeguimientoSerializer(source='id_venta', read_only=True)
 
     class Meta:
         model = Seguimiento
         fields = [
-            'id', 'id_venta', 'codigo_sot', 'cliente_nombre', 'codigo_pago',
-            'ciclo_facturacion', 'fecha_inicio', 'estado',
-            'descuento_realizado', 'meses_evaluados'
+            'id', 'venta', 'codigo_pago', 'ciclo_facturacion',
+            'fecha_inicio', 'estado', 'descuento_realizado',
+            'meses_evaluados', 'activo'
         ]
-        read_only_fields = ['id', 'id_venta', 'ciclo_facturacion']
+        # Eliminamos 'id_venta' de aquí. El serializador 'venta' ya es read_only=True por defecto.
+        read_only_fields = ['id']

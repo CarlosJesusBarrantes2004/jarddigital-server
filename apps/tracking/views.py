@@ -8,11 +8,12 @@ from .models import Seguimiento, SeguimientoMensual
 from .serializers import SeguimientoSerializer, SeguimientoMensualSerializer
 from .filters import SeguimientoFilter
 
-# Servicios
+# Servicios y Selectores (¡Aquí entra la magia!)
 from .services import actualizar_seguimiento_mensual, recalcular_fechas_por_nuevo_ciclo
+from .selectors import obtener_seguimientos_optimizados
 
 
-class SeguimientoViewSet(viewsets.ModelViewSet):
+class SeguimientoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     """
     ViewSet para la Cabecera.
     Permite listar todos los seguimientos y ver el detalle de uno (con sus meses anidados).
@@ -27,13 +28,8 @@ class SeguimientoViewSet(viewsets.ModelViewSet):
     ordering_fields = ['id_venta__fecha_real_inst', 'ciclo_facturacion']
 
     def get_queryset(self):
-        # Usamos prefetch_related para evitar el problema N+1 al traer los 6 meses anidados
-        # select_related para traer la info de la venta en la misma consulta
-        return Seguimiento.objects.select_related(
-            'id_venta'
-        ).prefetch_related(
-            'meses_evaluados'
-        ).filter(activo=True)
+        # Delegamos toda la carga pesada y las anotaciones a nuestro selector optimizado
+        return obtener_seguimientos_optimizados(self.request.user)
 
     def perform_update(self, serializer):
         instance = self.get_object()
