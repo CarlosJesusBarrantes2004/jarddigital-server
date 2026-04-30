@@ -38,4 +38,5 @@ urlpatterns = [
     path("api/sales/", include("apps.sales.urls")),
     path("api/core/", include("apps.core.urls")),
     path("api/ubigeo/", include("apps.ubigeo.urls")),
+    path("api/tracking/", include("apps.tracking.urls")),
 ]
