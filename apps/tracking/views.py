@@ -12,6 +12,9 @@ from .filters import SeguimientoFilter
 from .services import actualizar_seguimiento_mensual, recalcular_fechas_por_nuevo_ciclo
 from .selectors import obtener_seguimientos_optimizados
 
+# Seguridad
+from apps.users.permissions import PuedeGestionarSeguimiento
+
 
 class SeguimientoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     """
@@ -19,7 +22,7 @@ class SeguimientoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixin
     Permite listar todos los seguimientos y ver el detalle de uno (con sus meses anidados).
     """
     serializer_class = SeguimientoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PuedeGestionarSeguimiento]
 
     # ---> MOTORES DE BÚSQUEDA Y FILTROS ACTIVADOS <---
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -59,7 +62,7 @@ class SeguimientoMensualViewSet(mixins.UpdateModelMixin, viewsets.GenericViewSet
     """
     queryset = SeguimientoMensual.objects.filter(activo=True)
     serializer_class = SeguimientoMensualSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PuedeGestionarSeguimiento]
 
     def update(self, request, *args, **kwargs):
         """
