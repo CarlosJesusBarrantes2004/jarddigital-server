@@ -49,6 +49,14 @@ def actualizar_seguimiento_mensual(*, mes_instance: SeguimientoMensual, datos_va
     Servicio encargado de actualizar un registro de Seguimiento Mensual
     aplicando las reglas estrictas de bloqueo de pagos.
     """
+
+    # ---> REGLA: BLOQUEO POR ESTADO DEL PADRE <---
+    # Verificamos el estado de la Cabecera (Seguimiento principal)
+    if mes_instance.id_seguimiento.estado == 'PENALIZADO':
+        raise ValidationError({
+            "estado": "Operación denegada. No puedes editar los meses de un seguimiento que se encuentra PENALIZADO. Cambia el estado principal primero."
+        })
+
     nuevo_pago = datos_validados.get('pago_cliente_realizado', mes_instance.pago_cliente_realizado)
 
     # REGLA 3 y 4: Bloqueo/Desbloqueo de avance por pago
