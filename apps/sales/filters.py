@@ -44,7 +44,7 @@ class VentaFilter(django_filters.FilterSet):
     # 1. Filtro de Género (Ej: ?genero=M o ?genero=F)
     genero = django_filters.CharFilter(
         field_name="cliente_genero",
-        lookup_expr="iexact"
+        lookup_expr="istartswith"
     )
 
     # 2. Filtro del Mes de Instalación (Ej: ?mes_instalacion=9 para Septiembre)
