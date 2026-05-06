@@ -1,6 +1,7 @@
 from rest_framework import viewsets, mixins, status, filters
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 
 # Modelos, serializadores y filtros
@@ -9,7 +10,7 @@ from .serializers import SeguimientoSerializer, SeguimientoMensualSerializer
 from .filters import SeguimientoFilter
 
 # Servicios y Selectores (¡Aquí entra la magia!)
-from .services import actualizar_seguimiento_mensual, recalcular_fechas_por_nuevo_ciclo
+from .services import actualizar_seguimiento_mensual, recalcular_fechas_por_nuevo_ciclo, generar_excel_seguimiento_pendientes
 from .selectors import obtener_seguimientos_optimizados
 
 # Seguridad
@@ -52,6 +53,15 @@ class SeguimientoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixin
         else:
             # Flujo normal para cualquier otra edición (ej. cambiar el estado)
             serializer.save()
+
+    @action(detail=False, methods=['GET'])
+    def exportar_pendientes_mes_1(self, request):
+        """
+        Endpoint: /api/tracking/seguimientos/exportar_pendientes_mes_1/
+        Descarga el Excel con los clientes que deben el primer mes.
+        """
+        # Delegamos toda la lógica y seguridad a nuestro servicio
+        return generar_excel_seguimiento_pendientes(usuario_peticion=request.user)
 
 
 class SeguimientoMensualViewSet(mixins.UpdateModelMixin, viewsets.GenericViewSet):
