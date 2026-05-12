@@ -5,26 +5,30 @@ from dateutil.relativedelta import relativedelta
 def calcular_dia_ciclo(dia_instalacion: int) -> int:
     """
     Regla 2A: Mapeo del día de instalación al día del ciclo de facturación.
+    Diccionario actualizado con la nueva tabla operativa.
     """
-    # Aquí puedes completar el diccionario con el resto de la tabla operativa de tu equipo
     tabla_operativa = {
-        # Grupo de 3 días -> Salta al día 4
-        1: 4, 2: 4, 3: 4,
-        # Grupo de 2 días -> Salta al día 6
-        4: 6, 5: 6,
-        6: 9, 7: 9, 8: 9,
+        1: 3, 2: 3,
+        3: 4,
+        4: 5,
+        5: 8, 6: 8, 7: 8,
+        8: 9,
         9: 11, 10: 11,
-        11: 14, 12: 14, 13: 14,
+        11: 12,
+        12: 14, 13: 14,
         14: 16, 15: 16,
-        16: 19, 17: 19, 18: 19,
-        19: 21, 20: 21,
-        21: 24, 22: 24, 23: 24,
-        24: 26, 25: 26,
-        26: 29, 27: 29, 28: 29,
-        29: 31, 30: 31, 31: 31
+        16: 18, 17: 18,
+        18: 19,
+        19: 20,
+        20: 22, 21: 22,
+        22: 24, 23: 24,
+        24: 25,
+        25: 26,
+        26: 28, 27: 28,
+        # Salto de mes implícito
+        28: 1, 29: 1, 30: 1, 31: 1
     }
 
-    # Si por alguna razón envían un día que no está, devuelve el mismo día por defecto
     return tabla_operativa.get(dia_instalacion, dia_instalacion)
 
 
@@ -37,9 +41,14 @@ def generar_fechas_proyectadas(fecha_real_instalacion: date) -> dict:
     # ==========================================
     dia_ciclo = calcular_dia_ciclo(fecha_real_instalacion.day)
 
-    # Inyectamos el nuevo día. Usamos relativedelta por si el día resultante
-    # es mayor a los días que tiene el mes (ej. día 31 en Febrero, lo ajusta al 28/29 automático)
-    ciclo_facturacion = fecha_real_instalacion + relativedelta(day=dia_ciclo)
+    # 🛡️ PROTECCIÓN DE SALTO DE MES
+    if dia_ciclo < fecha_real_instalacion.day:
+        # Si el día del ciclo (ej. 1) es menor al día de instalación (ej. 29)
+        # Sumamos 1 mes entero y clavamos el día en 1.
+        ciclo_facturacion = fecha_real_instalacion + relativedelta(months=1, day=dia_ciclo)
+    else:
+        # Si no, ocurre en el mismo mes (ej. Instalado el 4, Ciclo el 5).
+        ciclo_facturacion = fecha_real_instalacion + relativedelta(day=dia_ciclo)
 
     meses = []
 
@@ -47,7 +56,7 @@ def generar_fechas_proyectadas(fecha_real_instalacion: date) -> dict:
     # 2B. DETALLE: Mes 1 (Primer Registro)
     # ==========================================
     fecha_seg_m1 = ciclo_facturacion + timedelta(days=10)
-    fecha_val_m1 = ciclo_facturacion + timedelta(days=20)
+    fecha_val_m1 = ciclo_facturacion + timedelta(days=18)
 
     meses.append({
         "mes_numero": 1,
@@ -70,8 +79,7 @@ def generar_fechas_proyectadas(fecha_real_instalacion: date) -> dict:
         nueva_fecha_val = base_fecha_val + relativedelta(months=(i - 1))
 
         # Fecha de Seguimiento: fecha_validacion_pago del registro ANTERIOR + 15 días
-        fecha_val_anterior = meses[-1]["fecha_validacion_pago"]
-        nueva_fecha_seg = fecha_val_anterior + timedelta(days=15)
+        nueva_fecha_seg = base_fecha_val + relativedelta(months=(i - 2)) + timedelta(days=15)
 
         meses.append({
             "mes_numero": i,
