@@ -119,11 +119,12 @@ class VentaViewSet(SoftDeleteModelViewSet):
         return obtener_ventas_permitidas(self.request.user)
 
     def create(self, request, *args, **kwargs):
-        # ---> EL CANDADO PARA SUPERVISORES <---
-        # Verificamos si el usuario tiene rol y si ese rol es SUPERVISOR o COORDINADOR
-        if request.user.id_rol and request.user.id_rol.codigo.upper() in ['SUPERVISOR', 'COORDINADOR']:
+        # ---> EL CANDADO PARA ROLES AUDITORES <---
+        roles_bloqueados = ['SUPERVISOR', 'COORDINADOR', 'SEGUIMIENTO']
+
+        if request.user.id_rol and request.user.id_rol.codigo.upper() in roles_bloqueados:
             raise PermissionDenied({
-                "error": "Operación denegada. Los supervisores y coordinadores solo pueden auditar y editar ventas, no crearlas."
+                "error": "Operación denegada. Los roles de auditoría y seguimiento no pueden crear ventas nuevas."
             })
 
         # Si es Asesor o Backoffice, dejamos que DRF siga su flujo normal de creación

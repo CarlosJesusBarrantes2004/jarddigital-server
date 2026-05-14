@@ -78,3 +78,26 @@ class SoloLecturaRolesOCrearDueno(permissions.BasePermission):
 
         # Si es escritura, verificamos que sea el DUEÑO
         return bool(request.user.id_rol and request.user.id_rol.codigo == 'DUENO')
+
+
+class PuedeGestionarSeguimiento(permissions.BasePermission):
+    """
+    DUEÑO y SEGUIMIENTO tienen acceso total (Ver y Editar).
+    COORDINADOR, SUPERVISOR y ASESOR solo tienen acceso de Lectura (GET).
+    """
+
+    def has_permission(self, request, view):
+        # Validación de seguridad básica
+        if not request.user or not getattr(request.user, 'id_rol', None):
+            return False
+
+        codigo_rol = request.user.id_rol.codigo
+
+        # 1. Si la petición es de Lectura (GET)
+        if request.method in permissions.SAFE_METHODS:
+            roles_lectura = ['DUENO', 'SEGUIMIENTO', 'COORDINADOR', 'SUPERVISOR', 'ASESOR']
+            return codigo_rol in roles_lectura
+
+        # 2. Si la petición es de Escritura (PATCH / PUT)
+        roles_escritura = ['DUENO', 'SEGUIMIENTO']
+        return codigo_rol in roles_escritura
