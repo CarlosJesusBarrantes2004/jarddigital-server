@@ -38,10 +38,10 @@ class Command(BaseCommand):
         # 1. Buscar ventas ATENDIDAS sin seguimiento
         ventas_sin_seguimiento = Venta.objects.filter(
             activo=True,
-            id_estado_sot__codigo__iexact='ATENDIDO',
+            id_estado_sot__codigo__in=['ATENDIDO', 'ATENDIDA'],
             fecha_real_inst__isnull=False,  # Necesitamos la fecha de instalación para calcular
-        ).exclude(
-            seguimiento__isnull=False  # Excluir las que YA tienen seguimiento
+        ).filter(
+            seguimiento__isnull=True  # Solo las que NO tienen seguimiento
         ).select_related('id_estado_sot', 'id_asesor', 'id_producto')
 
         total = ventas_sin_seguimiento.count()
