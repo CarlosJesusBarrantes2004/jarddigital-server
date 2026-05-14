@@ -17,13 +17,17 @@ inflection==0.5.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 location==0.0.7
+numpy==2.4.4
 openpyxl==3.1.5
 packaging==26.0
+pandas==3.0.2
 psycopg2-binary==2.9.11
 PyJWT==2.11.0
+python-dateutil==2.9.0.post0
 PyYAML==6.0.3
 referencing==0.37.0
 rpds-py==0.30.0
+six==1.17.0
 sqlparse==0.5.5
 types-PyYAML==6.0.12.20250915
 typing_extensions==4.15.0
