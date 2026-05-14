@@ -10,19 +10,24 @@ from django.http import HttpResponse
 from .selectors import obtener_seguimientos_optimizados
 
 
-def generar_excel_seguimiento_pendientes(usuario_peticion) -> HttpResponse:
+def generar_excel_seguimiento_pendientes(usuario_peticion, queryset_filtrado=None) -> HttpResponse:
     """
-    Genera un reporte Excel con los Seguimientos cuyo Mes 1 NO ha sido pagado.
-    Respeta el Row Level Security (RLS) del usuario que lo solicita.
-    """
-    # 1. Obtenemos el QuerySet base (Ya viene optimizado y con RLS aplicado)
-    seguimientos_base = obtener_seguimientos_optimizados(usuario_peticion)
+        Genera un reporte Excel con los Seguimientos cuyo Mes 1 NO ha sido pagado.
+        Respeta el RLS y los filtros dinámicos de la vista.
+        """
+    # 1. Si la vista nos mandó el queryset filtrado, lo usamos.
+    # Si no (por ejemplo, si llamamos a esta función desde una tarea en segundo plano), usamos el base.
+    if queryset_filtrado is not None:
+        seguimientos_base = queryset_filtrado
+    else:
+        seguimientos_base = obtener_seguimientos_optimizados(usuario_peticion)
 
     # 2. EL FILTRO MAGISTRAL: Solo Seguimientos donde el Mes 1 NO esté pagado
+    # Se añade sobre la base que ya viene filtrada por Sucursal, Fechas, etc.
     seguimientos_pendientes = seguimientos_base.filter(
         meses_evaluados__mes_numero=1,
         meses_evaluados__pago_cliente_realizado=False
-    ).distinct()  # Distinct por si acaso, aunque por arquitectura solo hay un Mes 1 por seguimiento
+    ).distinct()
 
     # 3. Preparación del Excel
     wb = openpyxl.Workbook()

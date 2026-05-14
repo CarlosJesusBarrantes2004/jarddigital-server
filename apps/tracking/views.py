@@ -58,10 +58,17 @@ class SeguimientoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixin
     def exportar_pendientes_mes_1(self, request):
         """
         Endpoint: /api/tracking/seguimientos/exportar_pendientes_mes_1/
-        Descarga el Excel con los clientes que deben el primer mes.
+        Descarga el Excel con los clientes que deben el primer mes,
+        respetando los filtros visuales que el usuario haya aplicado en la tabla.
         """
-        # Delegamos toda la lógica y seguridad a nuestro servicio
-        return generar_excel_seguimiento_pendientes(usuario_peticion=request.user)
+        # 1. Obtenemos el QuerySet base (Seguro por RLS) y le aplicamos los filtros de la URL
+        queryset_filtrado = self.filter_queryset(self.get_queryset())
+
+        # 2. Delegamos la lógica al servicio, pasándole el queryset ya filtrado
+        return generar_excel_seguimiento_pendientes(
+            usuario_peticion=request.user,
+            queryset_filtrado=queryset_filtrado
+        )
 
 
 class SeguimientoMensualViewSet(mixins.UpdateModelMixin, viewsets.GenericViewSet):
