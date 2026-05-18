@@ -31,6 +31,11 @@ class SeguimientoFilter(django_filters.FilterSet):
     fecha_seguimiento_desde = django_filters.DateFilter(method='filter_rango_seguimiento')
     fecha_seguimiento_hasta = django_filters.DateFilter(method='filter_rango_seguimiento')
 
+    # Filtro directo por el ID del origen (Sede + Modalidad)
+    modalidad_sede = django_filters.NumberFilter(
+        field_name="id_venta__id_origen_venta_id"
+    )
+
     # --- LÓGICA DE LOS MÉTODOS DE RANGO ---
 
     def filter_rango_pago(self, queryset, name, value):
@@ -73,5 +78,6 @@ class SeguimientoFilter(django_filters.FilterSet):
         model = Seguimiento
         fields = [
             'es_alto_valor', 'estado', 'descuento_realizado',
-            'mes_instalacion', 'anio_instalacion'
+            'mes_instalacion', 'anio_instalacion',
+            'modalidad_sede'
         ]

@@ -30,6 +30,7 @@ class SeguimientoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixin
     filterset_class = SeguimientoFilter
     search_fields = ["id_venta__codigo_sot", "id_venta__cliente_nombre", "codigo_pago"]
     ordering_fields = ['id_venta__fecha_real_inst', 'ciclo_facturacion']
+    ordering = ['-id']  # Ordena del más reciente al más antiguo por ID
 
     def get_queryset(self):
         # Delegamos toda la carga pesada y las anotaciones a nuestro selector optimizado
