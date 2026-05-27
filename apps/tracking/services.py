@@ -150,11 +150,59 @@ def recalcular_fechas_por_nuevo_ciclo(seguimiento: Seguimiento, nuevo_ciclo):
     )
 
 
+def ejecutar_cascada_fechas_futuras(mes_ancla: SeguimientoMensual):
+    """
+    Recalcula las fechas de los meses posteriores (Mes X+1 al 6)
+    basándose en la nueva fecha de validación del mes editado (Ancla).
+    Respeta el escudo: Si un mes futuro ya está pagado, no se altera.
+    """
+    # 1. Buscamos solo los meses FUTUROS (mes_numero > al mes editado)
+    meses_futuros = list(SeguimientoMensual.objects.filter(
+        id_seguimiento=mes_ancla.id_seguimiento,
+        mes_numero__gt=mes_ancla.mes_numero
+    ).order_by('mes_numero'))
+
+    if not meses_futuros:
+        return  # Si editó el Mes 6, no hay futuro. Terminamos.
+
+    base_fecha_val = mes_ancla.fecha_validacion_pago
+    meses_a_actualizar = []
+
+    for mes_futuro in meses_futuros:
+        # ---> EL ESCUDO PROTECTOR <---
+        # Si este mes futuro ya está pagado, es terreno sagrado. Lo saltamos.
+        if mes_futuro.pago_cliente_realizado:
+            continue
+
+        # Calculamos la distancia matemática entre el mes futuro y nuestra ancla
+        # Ej: Si ancla es Mes 2, y futuro es Mes 4 -> distancia = 2
+        distancia = mes_futuro.mes_numero - mes_ancla.mes_numero
+
+        # Nueva Validación: Base + X meses de distancia
+        nueva_fecha_val = base_fecha_val + relativedelta(months=distancia)
+
+        # Nuevo Seguimiento: Base + (X - 1) meses + 15 días
+        nueva_fecha_seg = base_fecha_val + relativedelta(months=distancia - 1) + timedelta(days=15)
+
+        # Optimizador: Solo agregamos a la lista si de verdad hubo un cambio
+        if mes_futuro.fecha_validacion_pago != nueva_fecha_val or mes_futuro.fecha_seguimiento != nueva_fecha_seg:
+            mes_futuro.fecha_validacion_pago = nueva_fecha_val
+            mes_futuro.fecha_seguimiento = nueva_fecha_seg
+            meses_a_actualizar.append(mes_futuro)
+
+    # 3. Guardado masivo (O(1) a la Base de Datos)
+    if meses_a_actualizar:
+        SeguimientoMensual.objects.bulk_update(
+            meses_a_actualizar,
+            fields=['fecha_seguimiento', 'fecha_validacion_pago']
+        )
+
+
 def actualizar_seguimiento_mensual(*, mes_instance: SeguimientoMensual, datos_validados: dict,
                                    usuario_peticion) -> SeguimientoMensual:
     """
     Servicio encargado de actualizar un registro de Seguimiento Mensual
-    aplicando las reglas estrictas de bloqueo de pagos.
+    aplicando las reglas estrictas de bloqueo de pagos y cascada de fechas.
     """
 
     # ---> REGLA: BLOQUEO POR ESTADO DEL PADRE <---
@@ -183,13 +231,19 @@ def actualizar_seguimiento_mensual(*, mes_instance: SeguimientoMensual, datos_va
                 "pago_cliente_realizado": f"Regla de Secuencia: No puedes validar el pago del Mes {mes_instance.mes_numero} porque el Mes {mes_anterior.mes_numero} aún no registra pago."
             })
 
-    # REGLA 5: La conformidad no requiere validación extra, ya que es independiente
+    # 1. CAPTURAMOS EL ESTADO ANTERIOR (Para saber si cambiaron las fechas)
+    fecha_val_anterior = mes_instance.fecha_validacion_pago
 
     # Guardado Base
     for attr, value in datos_validados.items():
         setattr(mes_instance, attr, value)
 
     # (Opcional) Podemos estampar quién y cuándo modificó esto si tuvieran campos de auditoría
-
     mes_instance.save()
+
+    # ---> NUEVA REGLA: EFECTO DOMINÓ HACIA ADELANTE <---
+    # Si la fecha de validación cambió, disparamos la cascada para recalcular el futuro
+    if fecha_val_anterior != mes_instance.fecha_validacion_pago:
+        ejecutar_cascada_fechas_futuras(mes_instance)
+
     return mes_instance
