@@ -6,11 +6,18 @@ class Asistencia(models.Model):
     id_usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, db_column="id_usuario")
     id_sucursal = models.ForeignKey(Sucursal, on_delete=models.PROTECT, db_column="id_sucursal")
     fecha = models.DateField()
-    asistio = models.BooleanField(default=False)
-    activo = models.BooleanField(default=True)  # ¡Añadido para que RRHH pueda corregir errores!
+
+    # True = Asistió | False = No Asistió | None = Vacío (Ignorado)
+    asistio = models.BooleanField(null=True, blank=True, default=None)
+    activo = models.BooleanField(default=True)
+
+    # Sellos de auditoría silenciosos
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "asistencia"
+        unique_together = ('id_usuario', 'fecha')
 
 
 class ReglaRendimientoMensual(models.Model):
