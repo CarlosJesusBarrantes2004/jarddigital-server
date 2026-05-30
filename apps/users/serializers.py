@@ -74,6 +74,8 @@ class UsuarioAdminSerializer(SucursalesMixin, serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False)
     sucursales = serializers.SerializerMethodField()
 
+    rol = RolSistemaSerializer(source="id_rol", read_only=True)
+
     class Meta:
         model = Usuario
         fields = [
@@ -84,6 +86,7 @@ class UsuarioAdminSerializer(SucursalesMixin, serializers.ModelSerializer):
             "nombre_completo",
             "email",
             "id_rol",
+            "rol",
             "activo",
             "ids_modalidades_sede",
             "sucursales",
