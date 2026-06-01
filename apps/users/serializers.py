@@ -85,8 +85,8 @@ class UsuarioAdminSerializer(SucursalesMixin, serializers.ModelSerializer):
             "celular",
             "nombre_completo",
             "email",
-            "id_rol",  # 2. Mantenemos el ID para que los POST/PUT sigan funcionando al crear/editar
-            "rol",     # 3. Exponemos el objeto completo anidado
+            "id_rol",
+            "rol",
             "activo",
             "ids_modalidades_sede",
             "sucursales",

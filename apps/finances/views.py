@@ -5,21 +5,36 @@ from rest_framework import status
 from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.core.models import Sucursal
-from .models import Asistencia
+from datetime import date
 from .filters import AsistenciaFilter
 from .selectors import obtener_asistencias_optimizadas
 from .serializers import AsistenciaLecturaSerializer, AsistenciaUpsertSerializer
 from .services import upsert_asistencia_masiva
+from rest_framework.permissions import IsAuthenticated
+from apps.users.permissions import PuedeTomarAsistencia
 
 class AsistenciaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     """
     ViewSet para cargar y guardar la grilla mensual de asistencias.
     """
+    permission_classes = [IsAuthenticated, PuedeTomarAsistencia]
     filter_backends = [DjangoFilterBackend]
     filterset_class = AsistenciaFilter
 
     def get_queryset(self):
-        return obtener_asistencias_optimizadas()
+        # 1. Obtenemos la base optimizada
+        queryset = obtener_asistencias_optimizadas()
+
+        # 2. Capturamos lo que el frontend nos está pidiendo en la URL
+        mes = self.request.query_params.get('mes')
+        anio = self.request.query_params.get('anio')
+
+        # 3. ESCUDO PROTECTOR: Si no mandan filtros, forzamos el mes actual
+        if not mes or not anio:
+            hoy = date.today()
+            queryset = queryset.filter(fecha__month=hoy.month, fecha__year=hoy.year)
+
+        return queryset
 
     def get_serializer_class(self):
         return AsistenciaLecturaSerializer
