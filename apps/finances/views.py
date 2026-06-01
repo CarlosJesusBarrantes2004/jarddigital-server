@@ -10,11 +10,14 @@ from .filters import AsistenciaFilter
 from .selectors import obtener_asistencias_optimizadas
 from .serializers import AsistenciaLecturaSerializer, AsistenciaUpsertSerializer
 from .services import upsert_asistencia_masiva
+from rest_framework.permissions import IsAuthenticated
+from apps.users.permissions import PuedeTomarAsistencia
 
 class AsistenciaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     """
     ViewSet para cargar y guardar la grilla mensual de asistencias.
     """
+    permission_classes = [IsAuthenticated, PuedeTomarAsistencia]
     filter_backends = [DjangoFilterBackend]
     filterset_class = AsistenciaFilter
 
