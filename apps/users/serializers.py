@@ -74,6 +74,8 @@ class UsuarioAdminSerializer(SucursalesMixin, serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False)
     sucursales = serializers.SerializerMethodField()
 
+    rol = RolSistemaSerializer(source="id_rol", read_only=True)
+
     class Meta:
         model = Usuario
         fields = [
@@ -83,7 +85,8 @@ class UsuarioAdminSerializer(SucursalesMixin, serializers.ModelSerializer):
             "celular",
             "nombre_completo",
             "email",
-            "id_rol",
+            "id_rol",  # 2. Mantenemos el ID para que los POST/PUT sigan funcionando al crear/editar
+            "rol",     # 3. Exponemos el objeto completo anidado
             "activo",
             "ids_modalidades_sede",
             "sucursales",
