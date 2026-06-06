@@ -10,6 +10,7 @@ from .filters import AsistenciaFilter
 from .selectors import obtener_asistencias_optimizadas
 from .serializers import AsistenciaLecturaSerializer, AsistenciaUpsertSerializer
 from .services import upsert_asistencia_masiva
+from .services import generar_excel_asistencias_mensual
 from rest_framework.permissions import IsAuthenticated
 from apps.users.permissions import PuedeTomarAsistencia
 
@@ -20,6 +21,22 @@ class AsistenciaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated, PuedeTomarAsistencia]
     filter_backends = [DjangoFilterBackend]
     filterset_class = AsistenciaFilter
+
+    @action(detail=False, methods=['GET'])
+    def exportar_excel(self, request):
+        # 1. Filtramos el queryset con tu método base
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # 2. Identificamos qué mes y año estamos procesando (para dibujar las columnas)
+        mes_str = request.query_params.get('mes')
+        anio_str = request.query_params.get('anio')
+
+        hoy = date.today()
+        mes = int(mes_str) if mes_str and mes_str.isdigit() else hoy.month
+        anio = int(anio_str) if anio_str and anio_str.isdigit() else hoy.year
+
+        # 3. Delegamos el procesamiento y entregamos el archivo
+        return generar_excel_asistencias_mensual(queryset, mes, anio)
 
     def get_queryset(self):
         # 1. Obtenemos la base optimizada
