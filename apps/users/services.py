@@ -1,9 +1,8 @@
 from django.db import transaction
 from django.utils import timezone
-from .models import Usuario, PermisoAcceso
+from .models import Usuario, PermisoAcceso, PerfilLaboral, SupervisorAsignacion
 # Importamos el modelo de GrabadorAudio
 from apps.sales.models import GrabadorAudio
-from apps.users.models import SupervisorAsignacion
 
 def _sincronizar_grabador(usuario: Usuario):
     """
@@ -28,6 +27,9 @@ def crear_usuario_admin(*, datos_validados: dict) -> Usuario:
     ids_sedes = datos_validados.pop('ids_modalidades_sede', [])
     password = datos_validados.pop('password', None)
 
+    # 1. Extraemos los datos del perfil laboral del diccionario
+    datos_perfil = datos_validados.pop('perfil_laboral', None)
+
     with transaction.atomic():
         usuario = Usuario(**datos_validados)
         if password:
@@ -41,12 +43,23 @@ def crear_usuario_admin(*, datos_validados: dict) -> Usuario:
         # ---> INYECCIÓN DE LÓGICA: Sincronizamos el grabador explícitamente <---
         _sincronizar_grabador(usuario)
 
+        # ---> INYECCIÓN: Creación del Perfil Laboral <---
+        if datos_perfil:
+            PerfilLaboral.objects.create(
+                id_usuario=usuario,
+                sueldo_base_part_time=datos_perfil.get('sueldo_base_part_time', 0.00),
+                fecha_inicio_contrato=datos_perfil.get('fecha_inicio_contrato')
+            )
+
     return usuario
 
 
 def actualizar_usuario_admin(*, usuario: Usuario, datos_validados: dict) -> Usuario:
     ids_sedes = datos_validados.pop('ids_modalidades_sede', None)
     password = datos_validados.pop('password', None)
+
+    # 1. Extraemos los datos del perfil laboral del diccionario
+    datos_perfil = datos_validados.pop('perfil_laboral', None)
 
     # ---> DETECCIÓN TEMPRANA <---
     # Revisamos si el usuario ESTABA activo y en este request lo están apagando
@@ -70,6 +83,17 @@ def actualizar_usuario_admin(*, usuario: Usuario, datos_validados: dict) -> Usua
 
         # Sincronizamos el grabador explícitamente
         _sincronizar_grabador(usuario)
+
+        # ---> INYECCIÓN: Actualización/Creación del Perfil Laboral <---
+        # Usamos update_or_create por si estamos editando a un usuario antiguo que no tenía perfil creado.
+        if datos_perfil is not None:
+            PerfilLaboral.objects.update_or_create(
+                id_usuario=usuario,
+                defaults={
+                    'sueldo_base_part_time': datos_perfil.get('sueldo_base_part_time', 0.00),
+                    'fecha_inicio_contrato': datos_perfil.get('fecha_inicio_contrato')
+                }
+            )
 
         # ---> INYECCIÓN ASUNTO 1: Cerrar los contratos de supervisor <---
         if se_esta_desactivando:
