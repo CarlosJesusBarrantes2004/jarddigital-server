@@ -1,3 +1,4 @@
+import logging
 from rest_framework import mixins
 from apps.core.models import Sucursal
 from .filters import AsistenciaFilter
@@ -7,7 +8,8 @@ from .services import upsert_asistencia_masiva
 from .services import generar_excel_asistencias_mensual
 
 from datetime import date
-from rest_framework import viewsets, views, status
+from django.core.cache import cache
+from rest_framework import viewsets, views, status, serializers
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
@@ -23,6 +25,9 @@ from .selectors import obtener_planillas_mensuales_optimizadas
 
 # Importamos tus permisos
 from apps.users.permissions import EsDueño, PuedeTomarAsistencia
+
+# Configuración del Logger para producción
+logger = logging.getLogger(__name__)
 
 
 class AsistenciaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
@@ -93,13 +98,24 @@ class AsistenciaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         }, status=status.HTTP_200_OK)
 
 
+# ==========================================
+# SERIALIZADOR DE VALIDACIÓN DE ENTRADA
+# ==========================================
+class PeriodoInputSerializer(serializers.Serializer):
+    mes = serializers.IntegerField(min_value=1, max_value=12)
+    anio = serializers.IntegerField(min_value=2020, max_value=2100)
+
+
+# ==========================================
+# VISTAS DE LA API
+# ==========================================
 class ReglaComisionViewSet(viewsets.ModelViewSet):
     """
     ENDPOINT 1: CRUD para que el Dueño configure los umbrales financieros.
+    La paginación se hereda de la configuración global (DEFAULT_PAGINATION_CLASS).
     """
     queryset = ReglaComision.objects.all().order_by('-periodo_inicio')
     serializer_class = ReglaComisionSerializer
-    # ---> Seguridad: Solo el Dueño puede ver, crear o editar estas reglas <---
     permission_classes = [IsAuthenticated, EsDueño]
 
 
@@ -108,7 +124,6 @@ class LiquidacionRRHHViewSet(viewsets.ReadOnlyModelViewSet):
     ENDPOINT 2: Mesa de Control para Recursos Humanos.
     """
     serializer_class = HistoricoPlanillaSerializer
-    # ---> Seguridad: Reutilizamos el permiso que deja entrar a DUEÑO y RRHH <---
     permission_classes = [IsAuthenticated, PuedeTomarAsistencia]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['mes_fiscal', 'anio_fiscal', 'id_usuario']
@@ -120,51 +135,79 @@ class LiquidacionRRHHViewSet(viewsets.ReadOnlyModelViewSet):
     def ejecutar_liquidacion(self, request):
         """
         Botón de pánico de RRHH: Ejecuta el cálculo masivo de toda la empresa.
-        Recibe en el body: {"mes": 6, "anio": 2026}
+        Retorna HTTP 200 OK de manera semántica al utilizar update_or_create.
         """
-        mes = request.data.get('mes')
-        anio = request.data.get('anio')
+        # Validación estricta de entrada
+        serializer = PeriodoInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not mes or not anio:
+        mes = serializer.validated_data['mes']
+        anio = serializer.validated_data['anio']
+
+        # Bloqueo de Concurrencia (Mutex Lock en Caché - 60 segundos)
+        lock_key = f"lock_liquidacion_masiva_{mes}_{anio}"
+        if not cache.add(lock_key, "locked", 60):
             return Response(
-                {"error": "Se requiere enviar el 'mes' y 'anio' para procesar la liquidación."},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Ya existe un proceso de liquidación ejecutándose para este periodo. Por favor, espere."},
+                status=status.HTTP_409_CONFLICT
             )
 
         try:
-            # Llamamos al cerebro financiero (Fase 3)
-            resultado = liquidar_planilla_mensual(int(mes), int(anio), request.user)
+            resultado = liquidar_planilla_mensual(mes, anio, request.user)
             return Response(resultado, status=status.HTTP_200_OK)
 
         except ValueError as e:
-            # Capturamos si faltan reglas administrativas
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            # Captura de errores inesperados de base de datos
-            return Response({"error": f"Error interno en el servidor: {str(e)}"},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Error crítico en liquidación masiva ({mes}/{anio}): {str(e)}", exc_info=True)
+            return Response(
+                {
+                    "error": "Ocurrió un error interno al procesar las liquidaciones. El equipo técnico ha sido notificado."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        finally:
+            # Liberamos el candado al terminar, falle o no
+            cache.delete(lock_key)
 
 
 class MiDashboardFinancieroView(views.APIView):
     """
     ENDPOINT 3: Vista en vivo para que el Asesor vea cuánto dinero lleva ganado.
-    No requiere base de datos, calcula la proyección "on the fly".
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Si el frontend no manda mes/año en la URL, asumimos el mes actual
+        # Guarda de Seguridad: Solo Asesores
+        if not hasattr(request.user, 'id_rol') or request.user.id_rol.codigo != 'ASESOR':
+            return Response(
+                {"error": "Este panel financiero es exclusivo para los Asesores."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         hoy = date.today()
-        mes = int(request.query_params.get('mes', hoy.month))
-        anio = int(request.query_params.get('anio', hoy.year))
+        # Validación de Query Params
+        data_entrada = {
+            'mes': request.query_params.get('mes', hoy.month),
+            'anio': request.query_params.get('anio', hoy.year)
+        }
+
+        serializer = PeriodoInputSerializer(data=data_entrada)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        mes = serializer.validated_data['mes']
+        anio = serializer.validated_data['anio']
 
         try:
-            # Delegamos la matemática a nuestro servicio
             proyeccion = proyectar_comisiones_asesor(request.user, mes, anio)
             return Response(proyeccion, status=status.HTTP_200_OK)
 
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": f"Error calculando tu proyección: {str(e)}"},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Error en dashboard de asesor ID {request.user.id}: {str(e)}", exc_info=True)
+            return Response(
+                {"error": "No pudimos calcular tu proyección en este momento."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
