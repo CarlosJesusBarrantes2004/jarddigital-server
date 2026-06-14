@@ -100,7 +100,8 @@ def obtener_ventas_permitidas(usuario_peticion) -> QuerySet:
         'id_distrito_nacimiento__id_provincia__id_departamento',
         'id_distrito_instalacion__id_provincia__id_departamento',
         'id_grabador_audios', 'usuario_revision_audios',
-        'audios'  # <--- Aquí sí cargamos los audios
+        'audios', # <--- Aquí sí cargamos los audios
+        'seguimiento__meses_evaluados'
     ).annotate(
         _ya_reingresada=Exists(reingresos_activos)
     )
