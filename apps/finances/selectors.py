@@ -119,3 +119,16 @@ def obtener_planillas_mensuales_optimizadas() -> QuerySet:
         'id_usuario',
         'procesado_por'
     ).order_by('-anio_fiscal', '-mes_fiscal', 'id_usuario__nombre_completo')
+
+
+def contar_inasistencias_mes(id_asesor: int, mes: int, anio: int) -> int:
+    """
+    Cuenta los días que el asesor tiene estado asistio=False en el mes.
+    """
+    return Asistencia.objects.filter(
+        id_usuario_id=id_asesor,
+        fecha__month=mes,
+        fecha__year=anio,
+        asistio=False,
+        activo=True
+    ).count()
