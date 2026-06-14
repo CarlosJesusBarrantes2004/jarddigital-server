@@ -3,8 +3,14 @@ from django.contrib.auth.hashers import make_password
 from rest_framework import serializers
 from .models import Usuario, RolSistema, PermisoAcceso, SupervisorAsignacion
 from .services import crear_usuario_admin, actualizar_usuario_admin
-from apps.core.models import Sucursal, ModalidadSede
+from .models import PerfilLaboral
 from drf_spectacular.utils import extend_schema_field
+
+
+class PerfilLaboralSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PerfilLaboral
+        fields = ['sueldo_base_part_time', 'fecha_inicio_contrato']
 
 
 class RolSistemaSerializer(serializers.ModelSerializer):
@@ -76,6 +82,9 @@ class UsuarioAdminSerializer(SucursalesMixin, serializers.ModelSerializer):
 
     rol = RolSistemaSerializer(source="id_rol", read_only=True)
 
+    # allow_null=True permite que el admin cree usuarios sin definir su sueldo aún
+    perfil_laboral = PerfilLaboralSerializer(required=False, allow_null=True)
+
     class Meta:
         model = Usuario
         fields = [
@@ -90,6 +99,7 @@ class UsuarioAdminSerializer(SucursalesMixin, serializers.ModelSerializer):
             "activo",
             "ids_modalidades_sede",
             "sucursales",
+            "perfil_laboral",
         ]
 
     def create(self, validated_data):

@@ -54,7 +54,7 @@ class UserMeView(APIView):
 # En 4 líneas obtenemos GET, POST, PUT, PATCH y DELETE lógico.
 class UsuarioViewSet(SoftDeleteModelViewSet):
     # Base del queryset: Optimizamos las consultas para traer toda la info relacionada de una sola vez
-    queryset = Usuario.objects.select_related('id_rol').prefetch_related(
+    queryset = Usuario.objects.select_related('id_rol', 'perfil_laboral').prefetch_related(
         'permisos__id_modalidad_sede__id_sucursal',
         'permisos__id_modalidad_sede__id_modalidad'
     ).all()
