@@ -6,6 +6,19 @@ from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
 from django.http import HttpResponse
 
+from decimal import Decimal, ROUND_HALF_UP
+from datetime import date
+
+# Importamos los modelos y selectores necesarios
+from apps.users.models import Usuario
+from apps.finances.models import HistoricoPlanilla, Asistencia
+from apps.finances.selectors import (
+    contar_ventas_instaladas_mes_actual,
+    obtener_ventas_pagadas_mes_anterior,
+    resumir_pozo_comisiones,
+    obtener_regla_comision_vigente
+)
+
 
 def generar_excel_asistencias_mensual(queryset_filtrado, mes: int, anio: int) -> HttpResponse:
     """
@@ -168,3 +181,156 @@ def upsert_asistencia_masiva(datos_validados: list[dict], id_sucursal: int, usua
         Asistencia.objects.bulk_update(a_actualizar, fields=['asistio', 'activo'])
 
     return len(datos_validados)
+
+
+# ==========================================
+# 1. MOTOR DE PROYECCIÓN (Cálculo individual)
+# ==========================================
+def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
+    """
+    Calcula toda la matriz financiera de un asesor para un mes específico.
+    Retorna un diccionario detallado, ideal para pintar el Dashboard del Asesor
+    o para ser consumido por el proceso de liquidación de RRHH.
+    """
+    fecha_evaluacion = date(anio, mes, 1)
+
+    # 1. Determinar el Escenario (Instaladas del mes actual)
+    instaladas = contar_ventas_instaladas_mes_actual(usuario.id, mes, anio)
+    escenario = 'ELITE' if instaladas >= 20 else 'ESTANDAR'
+
+    # 2. Obtener la Regla Administrativa Vigente
+    regla = obtener_regla_comision_vigente(escenario, fecha_evaluacion)
+    if not regla:
+        raise ValueError(f"No existe una Regla de Comisión configurada para el escenario {escenario} en {mes}/{anio}.")
+
+    # 3. Definir Sueldo Base del Mes
+    if escenario == 'ELITE':
+        sueldo_base = regla.sueldo_base_elite
+    else:
+        # Si por algún motivo RRHH no le puso sueldo en su perfil, evitamos que el código explote usando 0.00
+        sueldo_base = getattr(usuario.perfil_laboral, 'sueldo_base_part_time', Decimal('0.00')) if hasattr(usuario,
+                                                                                                           'perfil_laboral') else Decimal(
+            '0.00')
+
+    # 4. Obtener las Ventas Pagadas (El dinero real)
+    ventas_pagadas_qs = obtener_ventas_pagadas_mes_anterior(usuario.id, mes, anio)
+    resumen = resumir_pozo_comisiones(ventas_pagadas_qs)
+
+    ventas_pagadas = resumen['total_pagadas']
+    ventas_av = resumen['total_alto_valor']
+    pozo_bruto = Decimal(str(resumen['dinero_bruto']))
+
+    # 5. Algoritmo del Pozo Base (% a cobrar)
+    porcentaje_pozo = Decimal('0.00')
+    if ventas_pagadas >= regla.min_ventas_pagadas_optimo:
+        porcentaje_pozo = Decimal('1.00')  # 100%
+    elif ventas_pagadas >= regla.min_ventas_pagadas_medio:
+        porcentaje_pozo = Decimal('0.50')  # 50%
+
+    # 6. Algoritmo del Multiplicador de Alto Valor
+    multiplicador_av = Decimal('0.00')
+    if porcentaje_pozo > 0:
+        if ventas_av >= regla.alto_valor_nivel_3:
+            multiplicador_av = Decimal('1.10')  # 110%
+        elif ventas_av >= regla.alto_valor_nivel_2:
+            multiplicador_av = Decimal('1.00')  # 100%
+        else:
+            multiplicador_av = Decimal('0.90')  # 90% (Menos del Nivel 2 cae en la penalidad base)
+
+    # 7. Cálculo Matemático de la Comisión Final
+    comision_neta = (pozo_bruto * porcentaje_pozo * multiplicador_av).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    # 8. Cálculo de Inasistencias (Faltas de este mes)
+    faltas = Asistencia.objects.filter(
+        id_usuario=usuario, fecha__month=mes, fecha__year=anio, asistio=False, activo=True
+    ).count()
+
+    descuento_inasistencia = ((sueldo_base / Decimal('30')) * faltas).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    # 9. Consolidación Final
+    sueldo_neto_final = (sueldo_base + comision_neta - descuento_inasistencia).quantize(Decimal('0.01'),
+                                                                                        rounding=ROUND_HALF_UP)
+
+    return {
+        "id_usuario": usuario.id,
+        "nombre_completo": usuario.nombre_completo,
+        "escenario_aplicado": escenario,
+        "ventas_instaladas": instaladas,
+        "ventas_pagadas": ventas_pagadas,
+        "ventas_alto_valor": ventas_av,
+        "sueldo_base_aplicado": sueldo_base,
+        "pozo_bruto": pozo_bruto,
+        "porcentaje_pozo": porcentaje_pozo,
+        "multiplicador_av": multiplicador_av,
+        "comision_neta": comision_neta,
+        "dias_falta": faltas,
+        "descuento_faltas": descuento_inasistencia,
+        "sueldo_neto_final": sueldo_neto_final
+    }
+
+
+# ==========================================
+# 2. MOTOR DE LIQUIDACIÓN MASIVA (RRHH)
+# ==========================================
+def liquidar_planilla_mensual(mes: int, anio: int, usuario_rrhh: Usuario) -> dict:
+    """
+    Proceso batch que itera sobre todos los asesores activos,
+    proyecta sus comisiones y congela los resultados en la tabla HistoricoPlanilla.
+    """
+    # Traemos solo a los ASESORES activos con su perfil laboral acoplado (Evita N+1)
+    asesores = Usuario.objects.select_related('perfil_laboral').filter(
+        id_rol__codigo='ASESOR',
+        activo=True
+    )
+
+    registros_creados = 0
+    errores = []
+
+    # BLOQUE ATÓMICO: O se guardan todos correctamente, o la base de datos revierte todo.
+    with transaction.atomic():
+        for asesor in asesores:
+            try:
+                # 1. Calculamos los números del asesor usando el cerebro financiero
+                proyeccion = proyectar_comisiones_asesor(asesor, mes, anio)
+
+                # 2. Guardamos la fotografía inmutable
+                # Usamos update_or_create por si RRHH se equivocó, corrigió una asistencia y volvió a darle al botón de "Liquidar"
+                HistoricoPlanilla.objects.update_or_create(
+                    id_usuario=asesor,
+                    mes_fiscal=mes,
+                    anio_fiscal=anio,
+                    defaults={
+                        'ventas_instaladas_mes_actual': proyeccion['ventas_instaladas'],
+                        'ventas_pagadas_mes_anterior': proyeccion['ventas_pagadas'],
+                        'ventas_alto_valor_pagadas': proyeccion['ventas_alto_valor'],
+                        'cantidad_faltas': proyeccion['dias_falta'],
+
+                        'sueldo_base_aplicado': proyeccion['sueldo_base_aplicado'],
+                        'porcentaje_pozo_aplicado': proyeccion['porcentaje_pozo'] * Decimal('100'),
+                        # Lo guardamos como 50.00 en lugar de 0.50
+                        'multiplicador_alto_valor': proyeccion['multiplicador_av'] * Decimal('100'),
+
+                        'pozo_comisiones_bruto': proyeccion['pozo_bruto'],
+                        'comision_neta_ganada': proyeccion['comision_neta'],
+                        'descuento_inasistencias': proyeccion['descuento_faltas'],
+                        'sueldo_neto_final': proyeccion['sueldo_neto_final'],
+
+                        'procesado_por': usuario_rrhh
+                    }
+                )
+                registros_creados += 1
+
+            except ValueError as e:
+                # Si falta una regla, capturamos el error para avisarle al frontend sin romper el loop de los demás
+                errores.append(f"Asesor {asesor.nombre_completo}: {str(e)}")
+            except Exception as e:
+                errores.append(f"Error inesperado con {asesor.nombre_completo}: {str(e)}")
+
+        # Si hubo un error de configuración de reglas, abortamos la transacción completa (Rollback automático de Django)
+        if errores:
+            raise ValueError(f"La liquidación masiva fue abortada por errores de configuración: {errores[0]}")
+
+    return {
+        "mensaje": f"Se procesaron las planillas de {registros_creados} asesores exitosamente.",
+        "procesados": registros_creados
+    }
