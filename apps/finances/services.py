@@ -6,6 +6,20 @@ from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
 from django.http import HttpResponse
 
+from decimal import Decimal, ROUND_HALF_UP
+from datetime import date
+
+# Importamos los modelos y selectores necesarios
+from apps.users.models import Usuario
+from apps.finances.models import HistoricoPlanilla, Asistencia
+from apps.finances.selectors import (
+    contar_ventas_instaladas_mes_actual,
+    obtener_ventas_pagadas_mes_anterior,
+    resumir_pozo_comisiones,
+    obtener_regla_comision_vigente,
+    contar_inasistencias_mes
+)
+
 
 def generar_excel_asistencias_mensual(queryset_filtrado, mes: int, anio: int) -> HttpResponse:
     """
@@ -168,3 +182,153 @@ def upsert_asistencia_masiva(datos_validados: list[dict], id_sucursal: int, usua
         Asistencia.objects.bulk_update(a_actualizar, fields=['asistio', 'activo'])
 
     return len(datos_validados)
+
+
+# ==========================================
+# 1. MOTOR DE PROYECCIÓN (Cálculo individual)
+# ==========================================
+def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
+    fecha_evaluacion = date(anio, mes, 1)
+
+    # 1. Determinar el Escenario
+    instaladas = contar_ventas_instaladas_mes_actual(usuario.id, mes, anio)
+    escenario = 'ELITE' if instaladas >= 20 else 'ESTANDAR'
+
+    # 2. Obtener la Regla Administrativa
+    regla = obtener_regla_comision_vigente(escenario, fecha_evaluacion)
+    if not regla:
+        raise ValueError(f"No existe una Regla de Comisión configurada para el escenario {escenario} en {mes}/{anio}.")
+
+    # 3. Definir Sueldo Base (FIX 4: Falla explícitamente si RRHH no le puso sueldo)
+    if escenario == 'ELITE':
+        sueldo_base = regla.sueldo_base_elite
+    else:
+        perfil = getattr(usuario, 'perfil_laboral', None)
+        if perfil is None or perfil.sueldo_base_part_time is None:
+            raise ValueError(
+                f"El asesor {usuario.nombre_completo} no tiene un Perfil Laboral con sueldo base configurado."
+            )
+        sueldo_base = perfil.sueldo_base_part_time
+
+    # 4. Obtener las Ventas Pagadas
+    ventas_pagadas_qs = obtener_ventas_pagadas_mes_anterior(usuario.id, mes, anio)
+    resumen = resumir_pozo_comisiones(ventas_pagadas_qs)
+
+    ventas_pagadas = resumen['total_pagadas']
+    ventas_av = resumen['total_alto_valor']
+    pozo_bruto = Decimal(str(resumen['dinero_bruto']))
+
+    # 5. Algoritmo del Pozo Base (% a cobrar)
+    porcentaje_pozo = Decimal('0.00')
+    if ventas_pagadas >= regla.min_ventas_pagadas_optimo:
+        porcentaje_pozo = Decimal('1.00')  # 100%
+    elif ventas_pagadas >= regla.min_ventas_pagadas_medio:
+        porcentaje_pozo = Decimal('0.50')  # 50%
+
+    # 6. Algoritmo del Multiplicador de Alto Valor
+    # (FIX 3: Se calcula siempre, independiente de si el pozo es 0, para mantener el historial limpio)
+    if ventas_av >= regla.alto_valor_nivel_3:
+        multiplicador_av = Decimal('1.10')  # 110%
+    elif ventas_av >= regla.alto_valor_nivel_2:
+        multiplicador_av = Decimal('1.00')  # 100%
+    else:
+        multiplicador_av = Decimal('0.90')  # 90%
+
+    # 7. Cálculo Matemático de la Comisión Final
+    comision_neta = (pozo_bruto * porcentaje_pozo * multiplicador_av).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    # 8. Cálculo de Inasistencias (FIX 6: Usando el selector)
+    faltas = contar_inasistencias_mes(usuario.id, mes, anio)
+    descuento_inasistencia = ((sueldo_base / Decimal('30')) * faltas).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    # 9. Consolidación Final
+    sueldo_neto_final = (sueldo_base + comision_neta - descuento_inasistencia).quantize(Decimal('0.01'),
+                                                                                        rounding=ROUND_HALF_UP)
+
+    return {
+        "id_usuario": usuario.id,
+        "nombre_completo": usuario.nombre_completo,
+        "escenario_aplicado": escenario,
+        "ventas_instaladas": instaladas,
+        "ventas_pagadas": ventas_pagadas,
+        "ventas_alto_valor": ventas_av,
+        "sueldo_base_aplicado": sueldo_base,
+        "pozo_bruto": pozo_bruto,
+        "porcentaje_pozo": porcentaje_pozo,
+        "multiplicador_av": multiplicador_av,
+        "comision_neta": comision_neta,
+        "dias_falta": faltas,
+        "descuento_faltas": descuento_inasistencia,
+        "sueldo_neto_final": sueldo_neto_final
+    }
+
+
+# ==========================================
+# 2. MOTOR DE LIQUIDACIÓN MASIVA (RRHH)
+# ==========================================
+def liquidar_planilla_mensual(mes: int, anio: int, usuario_rrhh: Usuario) -> dict:
+    asesores = Usuario.objects.select_related('perfil_laboral').filter(
+        id_rol__codigo='ASESOR',
+        activo=True
+    )
+
+    creados = 0
+    actualizados = 0
+    errores = []
+
+    # Transacción maestra
+    with transaction.atomic():
+        for asesor in asesores:
+            try:
+                # FIX 1: Savepoint por cada asesor. Si uno explota, los demás sobreviven.
+                with transaction.atomic():
+                    proyeccion = proyectar_comisiones_asesor(asesor, mes, anio)
+
+                    # FIX 7: Desempacamos la tupla para saber si se creó o actualizó
+                    _, created = HistoricoPlanilla.objects.update_or_create(
+                        id_usuario=asesor,
+                        mes_fiscal=mes,
+                        anio_fiscal=anio,
+                        defaults={
+                            'ventas_instaladas_mes_actual': proyeccion['ventas_instaladas'],
+                            'ventas_pagadas_mes_anterior': proyeccion['ventas_pagadas'],
+                            'ventas_alto_valor_pagadas': proyeccion['ventas_alto_valor'],
+                            'cantidad_faltas': proyeccion['dias_falta'],
+
+                            'sueldo_base_aplicado': proyeccion['sueldo_base_aplicado'],
+                            # FIX 2: Guardamos el factor matemático puro (0.50, 0.90, etc.)
+                            'porcentaje_pozo_aplicado': proyeccion['porcentaje_pozo'],
+                            'multiplicador_alto_valor': proyeccion['multiplicador_av'],
+
+                            'pozo_comisiones_bruto': proyeccion['pozo_bruto'],
+                            'comision_neta_ganada': proyeccion['comision_neta'],
+                            'descuento_inasistencias': proyeccion['descuento_faltas'],
+                            'sueldo_neto_final': proyeccion['sueldo_neto_final'],
+
+                            'procesado_por': usuario_rrhh
+                        }
+                    )
+
+                    if created:
+                        creados += 1
+                    else:
+                        actualizados += 1
+
+            except ValueError as e:
+                errores.append(f"- {asesor.nombre_completo}: {str(e)}")
+            except Exception as e:
+                errores.append(f"- {asesor.nombre_completo} (Error DB): {str(e)}")
+
+        # FIX 5: Si hubo errores, lanzamos TODO el reporte para RRHH
+        if errores:
+            mensaje_error = "La liquidación masiva fue abortada. Corrija los siguientes errores:\n" + "\n".join(errores)
+            raise ValueError(mensaje_error)
+
+    # Si todo salió bien
+    total = creados + actualizados
+    return {
+        "mensaje": f"Liquidación exitosa: {creados} planillas nuevas creadas y {actualizados} actualizadas.",
+        "total_procesados": total,
+        "creados": creados,
+        "actualizados": actualizados
+    }

@@ -1,9 +1,15 @@
 from django.db import models
 from django.conf import settings
-from apps.core.models import Sucursal
+from django.core.validators import MinValueValidator, MaxValueValidator
+from apps.core.models import Sucursal  # Ajusta el import
 
+
+# ==========================================
+# 1. MÓDULO ASISTENCIAS
+# ==========================================
 class Asistencia(models.Model):
     id_usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, db_column="id_usuario")
+    # Mantenemos id_sucursal aquí para conservar la "fotografía histórica" de dónde marcó asistencia.
     id_sucursal = models.ForeignKey(Sucursal, on_delete=models.PROTECT, db_column="id_sucursal")
     fecha = models.DateField()
 
@@ -11,7 +17,6 @@ class Asistencia(models.Model):
     asistio = models.BooleanField(null=True, blank=True, default=None)
     activo = models.BooleanField(default=True)
 
-    # Sellos de auditoría silenciosos
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
@@ -20,67 +25,88 @@ class Asistencia(models.Model):
         unique_together = ('id_usuario', 'fecha')
 
 
-class ReglaRendimientoMensual(models.Model):
-    nombre = models.CharField(max_length=150)
-    anio = models.IntegerField()
-    mes = models.IntegerField()
+# ==========================================
+# 2. MOTOR DE CONFIGURACIÓN FINANCIERA
+# ==========================================
+class ReglaComision(models.Model):
+    ESCENARIO_CHOICES = [
+        ('ESTANDAR', 'Escenario Estándar (< 20 Inst.)'),
+        ('ELITE', 'Escenario Élite (>= 20 Inst.)'),
+    ]
 
-    # Gatillo
-    min_instaladas = models.IntegerField()
-    max_instaladas = models.IntegerField()
+    periodo_inicio = models.DateField(help_text="Mes/Año desde que rige esta regla (Día 1)")
+    escenario = models.CharField(max_length=15, choices=ESCENARIO_CHOICES)
 
-    # Consecuencias
-    activa_sueldo_ft = models.BooleanField(default=False)
-    monto_sueldo_ft = models.DecimalField(max_digits=10, decimal_places=2, default=1120.00)
-    factor_comision_futura = models.DecimalField(max_digits=3, decimal_places=2)
+    min_ventas_pagadas_medio = models.PositiveIntegerField(help_text="Mínimo para cobrar el 50%")
+    min_ventas_pagadas_optimo = models.PositiveIntegerField(help_text="Mínimo para cobrar el 100%")
+
+    alto_valor_nivel_1 = models.PositiveIntegerField(
+        help_text="Cantidad mínima para NO ser castigado al 90% (o mantener 90% en élite)")
+    alto_valor_nivel_2 = models.PositiveIntegerField(help_text="Cantidad para subir a 100%")
+    alto_valor_nivel_3 = models.PositiveIntegerField(help_text="Cantidad para subir a 110%")
+
+    sueldo_base_elite = models.DecimalField(max_digits=10, decimal_places=2, default=1130.00)
 
     activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "reglas_rendimiento_mensual"
-
-
-class BolsaComisiones(models.Model):
-    id_usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, db_column="id_usuario")
-    mes_origen = models.IntegerField()
-    anio_origen = models.IntegerField()
-
-    total_ventas_pagadas = models.IntegerField()
-    monto_bruto_generado = models.DecimalField(max_digits=10, decimal_places=2)
-
-    id_regla_aplicada = models.ForeignKey(ReglaRendimientoMensual, on_delete=models.PROTECT,
-                                          db_column="id_regla_aplicada")
-    factor_aplicado = models.DecimalField(max_digits=3, decimal_places=2)
-    monto_neto_guardado = models.DecimalField(max_digits=10, decimal_places=2)
-
-    pagado = models.BooleanField(default=False)
-
-    class Meta:
-        db_table = "bolsa_comisiones"
+        db_table = "fin_regla_comision"
+        ordering = ['-periodo_inicio']
         constraints = [
-            # ¡El seguro anti-quiebra! Impide que a un usuario se le generen 2 bolsas el mismo mes/año.
-            models.UniqueConstraint(fields=['id_usuario', 'mes_origen', 'anio_origen'], name='unica_bolsa_por_mes')
+            # FIX 1: Impide crear dos reglas del mismo escenario en el mismo mes exacto.
+            models.UniqueConstraint(fields=['periodo_inicio', 'escenario'], name='unica_regla_por_periodo_escenario')
         ]
 
+    def __str__(self):
+        return f"Regla {self.escenario} - Desde {self.periodo_inicio.strftime('%m/%Y')}"
 
-class LiquidacionMensualAsesor(models.Model):
+
+# ==========================================
+# 3. CONSOLIDACIÓN DE PAGOS
+# ==========================================
+class HistoricoPlanilla(models.Model):
     id_usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, db_column="id_usuario")
-    mes = models.IntegerField()
-    anio = models.IntegerField()
 
-    # Sueldo Base
-    total_instaladas_mes = models.IntegerField()
-    sueldo_base_calculado = models.DecimalField(max_digits=10, decimal_places=2)
+    # FIX 3: Validadores de rango para el mes
+    mes_fiscal = models.PositiveSmallIntegerField(
+        help_text="Mes en el que se DEPOSITA el dinero",
+        validators=[MinValueValidator(1), MaxValueValidator(12)]
+    )
+    anio_fiscal = models.PositiveIntegerField()
 
-    # Comisiones (Relación 1 a 1 porque una bolsa se paga en una única liquidación)
-    id_bolsa_pagada = models.OneToOneField(BolsaComisiones, on_delete=models.SET_NULL, null=True, blank=True,
-                                           db_column="id_bolsa_pagada")
-    monto_comisiones_pagado = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    ventas_instaladas_mes_actual = models.PositiveSmallIntegerField(help_text="Define si aplica Élite o Estándar")
+    ventas_pagadas_mes_anterior = models.PositiveSmallIntegerField(help_text="Define el % del pozo")
+    ventas_alto_valor_pagadas = models.PositiveSmallIntegerField(default=0, help_text="Define multiplicador 90/100/110")
+    cantidad_faltas = models.PositiveSmallIntegerField(help_text="Días de inasistencia (asistio=False)")
 
-    # Totales
-    monto_descuento_inasistencias = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    monto_final_pago = models.DecimalField(max_digits=10, decimal_places=2)
-    fecha_calculo = models.DateTimeField(auto_now_add=True)
+    sueldo_base_aplicado = models.DecimalField(max_digits=10, decimal_places=2)
+
+    # FIX 4: Claridad absoluta en el almacenamiento de factores
+    porcentaje_pozo_aplicado = models.DecimalField(max_digits=4, decimal_places=2,
+                                                   help_text="Factor matemático: 0.00, 0.50 o 1.00")
+    multiplicador_alto_valor = models.DecimalField(max_digits=4, decimal_places=2,
+                                                   help_text="Factor matemático: 0.90, 1.00 o 1.10")
+
+    pozo_comisiones_bruto = models.DecimalField(max_digits=10, decimal_places=2,
+                                                help_text="Suma pura de productos antes de multiplicadores")
+    comision_neta_ganada = models.DecimalField(max_digits=10, decimal_places=2,
+                                               help_text="Pozo * % Pozo * Multiplicador")
+    descuento_inasistencias = models.DecimalField(max_digits=10, decimal_places=2)
+
+    sueldo_neto_final = models.DecimalField(max_digits=10, decimal_places=2)
+
+    fecha_liquidacion = models.DateTimeField(auto_now_add=True)
+
+    # FIX 5: Retirado el db_column="procesado_por" para que Django asigne procesado_por_id
+    procesado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                      related_name="planillas_procesadas")
 
     class Meta:
-        db_table = "liquidacion_mensual_asesor"
+        db_table = "fin_historico_planilla"
+        constraints = [
+            models.UniqueConstraint(fields=['id_usuario', 'mes_fiscal', 'anio_fiscal'], name='unica_planilla_por_mes')
+        ]
+
+    def __str__(self):
+        return f"Planilla {self.id_usuario} - {self.mes_fiscal}/{self.anio_fiscal} - S/ {self.sueldo_neto_final}"
