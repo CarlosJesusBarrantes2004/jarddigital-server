@@ -102,9 +102,12 @@ class VentaSerializer(serializers.ModelSerializer):
         source="id_producto.nombre_paquete", read_only=True
     )
 
-    producto_costo_fijo = serializers.DecimalField(source="id_producto.costo_fijo_plan", max_digits=10, decimal_places=2, read_only=True)
-    producto_comision_base = serializers.DecimalField(source="id_producto.comision_base", max_digits=10, decimal_places=2, read_only=True)
-
+    producto_costo_fijo = serializers.DecimalField(
+        source="id_producto.costo_fijo_plan", max_digits=10, decimal_places=2, read_only=True
+    )
+    producto_comision_base = serializers.DecimalField(
+        source="id_producto.comision_base", max_digits=10, decimal_places=2, read_only=True
+    )
     pago_primer_mes = serializers.SerializerMethodField(read_only=True)
 
     nombre_estado = serializers.CharField(source="id_estado_sot.nombre", read_only=True)
@@ -214,9 +217,7 @@ class VentaSerializer(serializers.ModelSerializer):
         }
 
     def get_pago_primer_mes(self, obj):
-        # 1. Verificamos si la venta ya tiene un seguimiento creado (es decir, si ya se instaló y pasó a ATENDIDO)
         if hasattr(obj, 'seguimiento') and obj.seguimiento:
-            # 2. Buscamos en memoria el mes 1 para no golpear la base de datos con N+1 consultas
             mes_1 = next((mes for mes in obj.seguimiento.meses_evaluados.all() if mes.mes_numero == 1), None)
             if mes_1:
                 return mes_1.pago_cliente_realizado
