@@ -108,6 +108,7 @@ class VentaSerializer(serializers.ModelSerializer):
     producto_comision_base = serializers.DecimalField(
         source="id_producto.comision_base", max_digits=10, decimal_places=2, read_only=True
     )
+    producto_es_alto_valor = serializers.BooleanField(source="id_producto.es_alto_valor", read_only=True)
     pago_primer_mes = serializers.SerializerMethodField(read_only=True)
 
     nombre_estado = serializers.CharField(source="id_estado_sot.nombre", read_only=True)
