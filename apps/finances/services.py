@@ -1,5 +1,4 @@
 from django.db import transaction
-from .models import Asistencia
 import calendar
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
@@ -7,7 +6,7 @@ from openpyxl.utils import get_column_letter
 from django.http import HttpResponse
 
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import date
+from datetime import date, timedelta
 
 # Importamos los modelos y selectores necesarios
 from apps.users.models import Usuario
@@ -190,18 +189,44 @@ def upsert_asistencia_masiva(datos_validados: list[dict], id_sucursal: int, usua
 def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
     fecha_evaluacion = date(anio, mes, 1)
 
-    # 1. Determinar el Escenario
-    instaladas = contar_ventas_instaladas_mes_actual(usuario.id, mes, anio)
-    escenario = 'ELITE' if instaladas >= 20 else 'ESTANDAR'
+    # ============================================================
+    # ESCENARIO MES ACTUAL → Define el SUELDO BASE
+    # ============================================================
+    instaladas_mes_actual = contar_ventas_instaladas_mes_actual(usuario.id, mes, anio)
+    escenario_sueldo = 'ELITE' if instaladas_mes_actual >= 20 else 'ESTANDAR'
 
-    # 2. Obtener la Regla Administrativa
-    regla = obtener_regla_comision_vigente(escenario, fecha_evaluacion)
-    if not regla:
-        raise ValueError(f"No existe una Regla de Comisión configurada para el escenario {escenario} en {mes}/{anio}.")
+    # ============================================================
+    # ESCENARIO MES ANTERIOR → Define las COMISIONES
+    # ============================================================
+    fecha_mes_anterior = fecha_evaluacion.replace(day=1) - timedelta(days=1)
+    mes_anterior = fecha_mes_anterior.month
+    anio_anterior = fecha_mes_anterior.year
 
-    # 3. Definir Sueldo Base (FIX 4: Falla explícitamente si RRHH no le puso sueldo)
-    if escenario == 'ELITE':
-        sueldo_base = regla.sueldo_base_elite
+    instaladas_mes_anterior = contar_ventas_instaladas_mes_actual(
+        usuario.id, mes_anterior, anio_anterior
+    )
+    escenario_comisiones = 'ELITE' if instaladas_mes_anterior >= 20 else 'ESTANDAR'
+
+    # ============================================================
+    # REGLAS: Cada escenario busca su propia ReglaComision
+    # ============================================================
+    regla_sueldo = obtener_regla_comision_vigente(escenario_sueldo, fecha_evaluacion)
+    if not regla_sueldo:
+        raise ValueError(
+            f"No existe Regla de Comisión para escenario {escenario_sueldo} en {mes}/{anio}."
+        )
+
+    regla_comisiones = obtener_regla_comision_vigente(escenario_comisiones, fecha_evaluacion)
+    if not regla_comisiones:
+        raise ValueError(
+            f"No existe Regla de Comisión para escenario {escenario_comisiones} en {mes}/{anio}."
+        )
+
+    # ============================================================
+    # SUELDO BASE → Depende del escenario del MES ACTUAL
+    # ============================================================
+    if escenario_sueldo == 'ELITE':
+        sueldo_base = regla_sueldo.sueldo_base_elite
     else:
         perfil = getattr(usuario, 'perfil_laboral', None)
         if perfil is None or perfil.sueldo_base_part_time is None:
@@ -210,7 +235,9 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
             )
         sueldo_base = perfil.sueldo_base_part_time
 
-    # 4. Obtener las Ventas Pagadas
+    # ============================================================
+    # COMISIONES → Dependen del escenario del MES ANTERIOR
+    # ============================================================
     ventas_pagadas_qs = obtener_ventas_pagadas_mes_anterior(usuario.id, mes, anio)
     resumen = resumir_pozo_comisiones(ventas_pagadas_qs)
 
@@ -218,38 +245,43 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
     ventas_av = resumen['total_alto_valor']
     pozo_bruto = Decimal(str(resumen['dinero_bruto']))
 
-    # 5. Algoritmo del Pozo Base (% a cobrar)
+    # % del pozo según regla del MES ANTERIOR
     porcentaje_pozo = Decimal('0.00')
-    if ventas_pagadas >= regla.min_ventas_pagadas_optimo:
-        porcentaje_pozo = Decimal('1.00')  # 100%
-    elif ventas_pagadas >= regla.min_ventas_pagadas_medio:
-        porcentaje_pozo = Decimal('0.50')  # 50%
+    if ventas_pagadas >= regla_comisiones.min_ventas_pagadas_optimo:
+        porcentaje_pozo = Decimal('1.00')
+    elif ventas_pagadas >= regla_comisiones.min_ventas_pagadas_medio:
+        porcentaje_pozo = Decimal('0.50')
 
-    # 6. Algoritmo del Multiplicador de Alto Valor
-    # (FIX 3: Se calcula siempre, independiente de si el pozo es 0, para mantener el historial limpio)
-    if ventas_av >= regla.alto_valor_nivel_3:
-        multiplicador_av = Decimal('1.10')  # 110%
-    elif ventas_av >= regla.alto_valor_nivel_2:
-        multiplicador_av = Decimal('1.00')  # 100%
+    # Multiplicador AV según regla del MES ANTERIOR
+    if ventas_av >= regla_comisiones.alto_valor_nivel_3:
+        multiplicador_av = Decimal('1.10')
+    elif ventas_av >= regla_comisiones.alto_valor_nivel_2:
+        multiplicador_av = Decimal('1.00')
     else:
-        multiplicador_av = Decimal('0.90')  # 90%
+        multiplicador_av = Decimal('0.90')
 
-    # 7. Cálculo Matemático de la Comisión Final
-    comision_neta = (pozo_bruto * porcentaje_pozo * multiplicador_av).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    # Cálculo final
+    comision_neta = (pozo_bruto * porcentaje_pozo * multiplicador_av).quantize(
+        Decimal('0.01'), rounding=ROUND_HALF_UP
+    )
 
-    # 8. Cálculo de Inasistencias (FIX 6: Usando el selector)
+    # Inasistencias
     faltas = contar_inasistencias_mes(usuario.id, mes, anio)
-    descuento_inasistencia = ((sueldo_base / Decimal('30')) * faltas).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    descuento_inasistencia = ((sueldo_base / Decimal('30')) * faltas).quantize(
+        Decimal('0.01'), rounding=ROUND_HALF_UP
+    )
 
-    # 9. Consolidación Final
-    sueldo_neto_final = (sueldo_base + comision_neta - descuento_inasistencia).quantize(Decimal('0.01'),
-                                                                                        rounding=ROUND_HALF_UP)
+    sueldo_neto_final = (sueldo_base + comision_neta - descuento_inasistencia).quantize(
+        Decimal('0.01'), rounding=ROUND_HALF_UP
+    )
 
     return {
         "id_usuario": usuario.id,
         "nombre_completo": usuario.nombre_completo,
-        "escenario_aplicado": escenario,
-        "ventas_instaladas": instaladas,
+        # Dos escenarios separados para trazabilidad
+        "escenario_sueldo": escenario_sueldo,
+        "escenario_comisiones": escenario_comisiones,
+        "ventas_instaladas": instaladas_mes_actual,
         "ventas_pagadas": ventas_pagadas,
         "ventas_alto_valor": ventas_av,
         "sueldo_base_aplicado": sueldo_base,
