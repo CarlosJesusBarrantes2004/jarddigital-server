@@ -55,24 +55,26 @@ class GrabadorAudio(models.Model):
 
 
 class Producto(models.Model):
-    # ==========================================
     # NUEVOS CAMPOS (Filtros en cascada)
-    # ==========================================
-    # 1. Usamos 'campana' sin 'ñ' para evitar problemas en BD o URLs
     nombre_campana = models.CharField(max_length=150)
-
-    # 2. Ej: "1 PLAY", "2 PLAY", "3 PLAY"
     tipo_solucion = models.CharField(max_length=50)
-
-    # 3. Ej: "400 MB CLARO TV ESTANDAR PRO 5000"
     nombre_paquete = models.CharField(max_length=200)
 
-    # ==========================================
-    # CAMPOS EXISTENTES
-    # ==========================================
+    # CAMPOS EXISTENTES Y MODIFICADOS
     es_alto_valor = models.BooleanField(default=False)
     costo_fijo_plan = models.DecimalField(max_digits=10, decimal_places=2)
-    comision_base = models.DecimalField(max_digits=10, decimal_places=2)
+
+    # ---> EL CAMBIO ARQUITECTÓNICO BIFURCADO <---
+    comision_base_call = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        help_text="Comisión si la venta se hizo en modalidad CALL"
+    )
+    comision_base_campo = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        null=True, blank=True,
+        help_text="Comisión si la venta se hizo en modalidad CAMPO. Dejar en blanco si no aplica."
+    )
+
     fecha_inicio_vigencia = models.DateField(auto_now_add=True)
     fecha_fin_vigencia = models.DateField(null=True, blank=True)
     activo = models.BooleanField(default=True)
