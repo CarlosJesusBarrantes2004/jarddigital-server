@@ -50,7 +50,8 @@ class ProductoSerializer(serializers.ModelSerializer):
             "nombre_paquete",
             "es_alto_valor",
             "costo_fijo_plan",
-            "comision_base",
+            "comision_base_call",
+            "comision_base_campo",
             "fecha_inicio_vigencia",
             "fecha_fin_vigencia",
             "activo",
@@ -105,8 +106,13 @@ class VentaSerializer(serializers.ModelSerializer):
     producto_costo_fijo = serializers.DecimalField(
         source="id_producto.costo_fijo_plan", max_digits=10, decimal_places=2, read_only=True
     )
-    producto_comision_base = serializers.DecimalField(
-        source="id_producto.comision_base", max_digits=10, decimal_places=2, read_only=True
+    producto_comision_base_call = serializers.DecimalField(
+        source="id_producto.comision_base_call",
+        max_digits=10, decimal_places=2, read_only=True
+    )
+    producto_comision_base_campo = serializers.DecimalField(
+        source="id_producto.comision_base_campo",
+        max_digits=10, decimal_places=2, read_only=True
     )
     producto_es_alto_valor = serializers.BooleanField(source="id_producto.es_alto_valor", read_only=True)
     pago_primer_mes = serializers.SerializerMethodField(read_only=True)
