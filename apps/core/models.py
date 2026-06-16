@@ -12,6 +12,11 @@ class Sucursal(models.Model):
 
 class Modalidad(models.Model):
     nombre = models.CharField(max_length=50) # Ej: CALL CENTER, CAMPO
+    codigo = models.CharField(
+        max_length=20,
+        unique=True,
+        help_text="Identificador técnico inmutable. Ej: CALL, CAMPO. NO cambiar una vez creado."
+    )
     activo = models.BooleanField(default=True)
 
     class Meta:

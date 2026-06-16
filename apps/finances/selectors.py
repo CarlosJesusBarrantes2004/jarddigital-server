@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Optional
 from datetime import date, timedelta
-from django.db.models import QuerySet, Count, Sum, Q, F
+from django.db.models import QuerySet, Count, Sum, Q, F, Case, When, DecimalField, Value
 from .models import Asistencia, ReglaComision, HistoricoPlanilla
 from apps.sales.models import Venta
 from apps.tracking.models import SeguimientoMensual
@@ -72,21 +72,32 @@ def obtener_ventas_pagadas_mes_anterior(id_asesor: int, mes: int, anio: int) -> 
 
 def resumir_pozo_comisiones(ventas_pagadas_qs: QuerySet) -> dict:
     """
-    Toma el QuerySet de ventas pagadas y lo exprime en memoria SQL
-    para devolver el total de dinero base y cuántas son de Alto Valor.
+    Exprime el QuerySet en memoria SQL. Suma la comisión condicionalmente
+    dependiendo de la modalidad de la venta usando el código inmutable.
     """
     resumen = ventas_pagadas_qs.aggregate(
         total_pagadas=Count('id'),
-        dinero_bruto=Sum('id_seguimiento__id_venta__id_producto__comision_base'),
+        dinero_bruto=Sum(
+            Case(
+                When(
+                    id_seguimiento__id_venta__id_origen_venta__id_modalidad__codigo__iexact='CALL',
+                    then=F('id_seguimiento__id_venta__id_producto__comision_base_call')
+                ),
+                When(
+                    id_seguimiento__id_venta__id_origen_venta__id_modalidad__codigo__iexact='CAMPO',
+                    then=F('id_seguimiento__id_venta__id_producto__comision_base_campo')
+                ),
+                default=Value(Decimal('0.00'), output_field=DecimalField()),
+                output_field=DecimalField()
+            )
+        ),
         total_alto_valor=Count(
             'id',
             filter=Q(id_seguimiento__id_venta__id_producto__es_alto_valor=True)
         )
     )
-
     return {
         "total_pagadas": resumen['total_pagadas'] or 0,
-        # <-- CRÍTICO: Fallback como Decimal para evitar TypeErrors en services.py
         "dinero_bruto": resumen['dinero_bruto'] or Decimal('0.00'),
         "total_alto_valor": resumen['total_alto_valor'] or 0
     }
