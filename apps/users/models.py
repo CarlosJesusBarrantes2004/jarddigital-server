@@ -25,6 +25,16 @@ class Usuario(AbstractUser):
         db_column="id_rol" # ¡Evita que se llame id_rol_id!
     )
 
+    # ---> EL NUEVO CAMPO DE IDENTIFICACIÓN <---
+    # Usamos max_length=15 por si en el futuro la empresa contrata extranjeros (CEX/Pasaporte)
+    dni = models.CharField(
+        max_length=15,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="Documento Nacional de Identidad o Carné de Extranjería"
+    )
+
     # NUEVOS CAMPOS DE CONTACTO
     fecha_nacimiento = models.DateField(null=True, blank=True)
     celular = models.CharField(max_length=20, null=True, blank=True)
