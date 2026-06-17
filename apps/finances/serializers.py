@@ -50,10 +50,12 @@ class HistoricoPlanillaSerializer(serializers.ModelSerializer):
     nombre_asesor = serializers.CharField(source='id_usuario.nombre_completo', read_only=True)
     nombre_rrhh = serializers.CharField(source='procesado_por.nombre_completo', read_only=True)
 
+    dni_asesor = serializers.CharField(source='id_usuario.dni', read_only=True)
+
     class Meta:
         model = HistoricoPlanilla
         fields = [
-            'id', 'id_usuario', 'nombre_asesor', 'mes_fiscal', 'anio_fiscal',
+            'id', 'id_usuario', 'nombre_asesor', 'dni_asesor', 'mes_fiscal', 'anio_fiscal',
             'modalidad_aplicada', 'ventas_instaladas_mes_actual', 'ventas_pagadas_mes_anterior',
             'ventas_alto_valor_pagadas', 'cantidad_faltas', 'sueldo_base_aplicado',
             'porcentaje_pozo_aplicado', 'multiplicador_alto_valor',
