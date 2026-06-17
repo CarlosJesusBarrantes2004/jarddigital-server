@@ -1,7 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
-from apps.core.models import Sucursal  # Ajusta el import
+from apps.core.models import Sucursal, Modalidad  # Ajusta el import
 
 
 # ==========================================
@@ -37,6 +37,14 @@ class ReglaComision(models.Model):
     periodo_inicio = models.DateField(help_text="Mes/Año desde que rige esta regla (Día 1)")
     escenario = models.CharField(max_length=15, choices=ESCENARIO_CHOICES)
 
+    # ---> LA NUEVA PIEZA ARQUITECTÓNICA <---
+    id_modalidad = models.ForeignKey(
+        Modalidad,
+        on_delete=models.PROTECT,
+        db_column='id_modalidad',
+        help_text="Modalidad a la que aplica esta regla (Ej: CALL o CAMPO)"
+    )
+
     min_ventas_pagadas_medio = models.PositiveIntegerField(help_text="Mínimo para cobrar el 50%")
     min_ventas_pagadas_optimo = models.PositiveIntegerField(help_text="Mínimo para cobrar el 100%")
 
@@ -54,12 +62,17 @@ class ReglaComision(models.Model):
         db_table = "fin_regla_comision"
         ordering = ['-periodo_inicio']
         constraints = [
-            # FIX 1: Impide crear dos reglas del mismo escenario en el mismo mes exacto.
-            models.UniqueConstraint(fields=['periodo_inicio', 'escenario'], name='unica_regla_por_periodo_escenario')
+            # FIX: La nueva tríada perfecta anti-duplicados.
+            # Permite tener: "2026-06-01 + ESTANDAR + CALL" y "2026-06-01 + ESTANDAR + CAMPO"
+            models.UniqueConstraint(
+                fields=['periodo_inicio', 'escenario', 'id_modalidad'],
+                name='unica_regla_por_periodo_escenario_modalidad'
+            )
         ]
 
     def __str__(self):
-        return f"Regla {self.escenario} - Desde {self.periodo_inicio.strftime('%m/%Y')}"
+        # Ahora el string de la consola mostrará claramente a quién pertenece
+        return f"Regla {self.escenario} ({self.id_modalidad.codigo}) - Desde {self.periodo_inicio.strftime('%m/%Y')}"
 
 
 # ==========================================
