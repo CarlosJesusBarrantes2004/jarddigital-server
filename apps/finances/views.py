@@ -20,7 +20,7 @@ from .models import ReglaComision
 from .serializers import ReglaComisionSerializer, HistoricoPlanillaSerializer
 
 # Importamos los servicios y selectores
-from .services import liquidar_planilla_mensual, proyectar_comisiones_asesor
+from .services import liquidar_planilla_mensual, proyectar_comisiones_asesor, generar_excel_planillas_asesores
 from .selectors import obtener_planillas_mensuales_optimizadas
 
 # Importamos tus permisos
@@ -169,6 +169,36 @@ class LiquidacionRRHHViewSet(viewsets.ReadOnlyModelViewSet):
         finally:
             # Liberamos el candado al terminar, falle o no
             cache.delete(lock_key)
+
+    # ============================================================
+    # ---> LA NUEVA PIEZA DE EXPORTACIÓN (EXCEL) <---
+    # ============================================================
+    @action(detail=False, methods=['GET'], url_path='exportar-excel')
+    def exportar_excel(self, request):
+        """
+        ENDPOINT: GET /api/finances/planillas/exportar-excel/
+        Genera y descarga el reporte Excel respetando los filtros de la pantalla
+        (mes_fiscal, anio_fiscal, id_usuario).
+        """
+        try:
+            # Capturamos el QuerySet base de este ViewSet
+            queryset_base = self.get_queryset()
+
+            # Dejamos que los filter_backends (DjangoFilterBackend) apliquen
+            # la misma lógica de filtrado por URL params (?mes_fiscal=6&anio_fiscal=2026)
+            queryset_filtrado = self.filter_queryset(queryset_base)
+
+            # Si el dueño entra a la pantalla y no ha filtrado nada, podríamos opcionalmente
+            # forzar a que descargue solo el mes actual o dejar que baje todo el histórico.
+            # Por seguridad contable, llamamos a nuestro servicio pasándole la data filtrada:
+            return generar_excel_planillas_asesores(queryset_filtrado)
+
+        except Exception as e:
+            logger.error(f"Error al exportar planilla Excel: {str(e)}", exc_info=True)
+            return Response(
+                {"error": "No se pudo generar el archivo Excel en este momento."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class MiDashboardFinancieroView(views.APIView):

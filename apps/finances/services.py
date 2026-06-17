@@ -184,6 +184,105 @@ def upsert_asistencia_masiva(datos_validados: list[dict], id_sucursal: int, usua
     return len(datos_validados)
 
 
+
+def generar_excel_planillas_asesores(queryset_filtrado) -> HttpResponse:
+    """
+    Genera un reporte Excel con las planillas liquidadas de los asesores.
+    Recibe el queryset ya filtrado por la vista (mes, año, sucursal, etc.).
+    """
+    # 1. Optimización vital: Aseguramos traer los datos del usuario en la misma consulta
+    planillas = queryset_filtrado.select_related('id_usuario')
+
+    # 2. Preparación del Excel
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Planilla Comisiones"
+
+    # Estilos (Manteniendo tu diseño corporativo)
+    fill_cabecera = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')
+    font_cabecera = Font(color='FFFFFFFF', italic=True, bold=True)
+    borde_delgado = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+    alineacion_centrada = Alignment(horizontal='center', vertical='center')
+
+    # Formato de moneda para que el Excel lo reconozca como dinero
+    formato_moneda = '#,##0.00'
+
+    cabeceras = ["ITEM", "MODALIDAD", "DNI", "ASESOR", "SUELDO (CON DCTO)", "COMISIÓN", "TOTAL"]
+    ws.append(cabeceras)
+
+    # Aplicar estilos a la cabecera
+    for cell in ws[1]:
+        cell.fill = fill_cabecera
+        cell.font = font_cabecera
+        cell.alignment = alineacion_centrada
+        cell.border = borde_delgado
+
+    # 3. Llenado de Datos
+    for idx, planilla in enumerate(planillas, start=1):
+        usuario = planilla.id_usuario
+
+        # Manejo seguro de nulos para Usuario y DNI
+        dni = usuario.dni if (usuario and hasattr(usuario, 'dni') and usuario.dni) else "SIN DNI"
+        nombre = usuario.nombre_completo if usuario else "Desconocido"
+        modalidad = planilla.modalidad_aplicada or "CALL"
+
+        # Cálculos financieros (Convertidos a float para que Excel pueda sumarlos si el cliente quiere)
+        sueldo_base = float(planilla.sueldo_base_aplicado or 0)
+        descuento = float(planilla.descuento_inasistencias or 0)
+        sueldo_descontado = sueldo_base - descuento
+
+        comision = float(planilla.comision_neta_ganada or 0)
+        total = float(planilla.sueldo_neto_final or 0)
+
+        fila = [
+            idx,
+            modalidad,
+            dni,
+            nombre,
+            sueldo_descontado,
+            comision,
+            total
+        ]
+        ws.append(fila)
+
+        # Aplicar estilos a la fila recién agregada
+        fila_actual = ws[ws.max_row]
+        for idx_celda, celda in enumerate(fila_actual):
+            celda.alignment = alineacion_centrada
+            celda.border = borde_delgado
+            # A las columnas de dinero (índices 4, 5 y 6) les ponemos formato numérico
+            if idx_celda in [4, 5, 6]:
+                celda.number_format = formato_moneda
+
+    # 4. Auto-Ajuste de Columnas
+    max_col_letra = get_column_letter(len(cabeceras))
+    ws.auto_filter.ref = f"A1:{max_col_letra}{ws.max_row}"
+
+    for col in ws.columns:
+        max_length = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            try:
+                # Usamos un formateo simple de string para medir el ancho
+                if cell.value and len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        # Un poco de margen extra
+        ws.column_dimensions[col_letter].width = (max_length + 4) if (max_length + 4) >= 12 else 12
+
+    # 5. Retornamos la respuesta HTTP
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="Reporte_Planilla_Comisiones.xlsx"'
+    wb.save(response)
+
+    return response
+
+
+
 # ==========================================
 # 1. MOTOR DE PROYECCIÓN (Cálculo individual)
 # ==========================================
