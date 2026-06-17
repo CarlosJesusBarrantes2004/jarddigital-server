@@ -88,6 +88,12 @@ class HistoricoPlanilla(models.Model):
     )
     anio_fiscal = models.PositiveIntegerField()
 
+    modalidad_aplicada = models.CharField(
+        max_length=20,
+        default='CALL',  # Salva la vida en la migración para los registros viejos
+        help_text="Código de la modalidad evaluada en este mes (Ej: CALL, CAMPO)"
+    )
+
     ventas_instaladas_mes_actual = models.PositiveSmallIntegerField(help_text="Define si aplica Élite o Estándar")
     ventas_pagadas_mes_anterior = models.PositiveSmallIntegerField(help_text="Define el % del pozo")
     ventas_alto_valor_pagadas = models.PositiveSmallIntegerField(default=0, help_text="Define multiplicador 90/100/110")

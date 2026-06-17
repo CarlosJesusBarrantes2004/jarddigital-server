@@ -355,6 +355,7 @@ def liquidar_planilla_mensual(mes: int, anio: int, usuario_rrhh: Usuario) -> dic
                         mes_fiscal=mes,
                         anio_fiscal=anio,
                         defaults={
+                            'modalidad_aplicada': proyeccion['modalidad_aplicada'],
                             'ventas_instaladas_mes_actual': proyeccion['ventas_instaladas'],
                             'ventas_pagadas_mes_anterior': proyeccion['ventas_pagadas'],
                             'ventas_alto_valor_pagadas': proyeccion['ventas_alto_valor'],
