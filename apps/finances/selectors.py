@@ -44,20 +44,20 @@ def contar_ventas_instaladas_mes_actual(id_asesor: int, mes: int, anio: int) -> 
 def obtener_ventas_pagadas_mes_anterior(id_asesor: int, mes: int, anio: int) -> QuerySet:
     """
     Trae las ventas PAGADAS del mes anterior.
-    Aplica 3 JOINs vitales (Seguimiento -> Venta -> Producto) para obtener
-    la comisión base y saber si es de alto valor sin hacer consultas N+1.
+    Aplica JOINs vitales para obtener la comisión base, saber si es de alto valor
+    y conocer la modalidad (CALL/CAMPO) sin hacer consultas N+1 en el futuro.
     """
-    # 1. Cálculo robusto del mes anterior usando datetime
     fecha_evaluacion = date(anio, mes, 1)
     ultimo_dia_mes_anterior = fecha_evaluacion - timedelta(days=1)
 
     mes_anterior = ultimo_dia_mes_anterior.month
     anio_anterior = ultimo_dia_mes_anterior.year
 
-    # 2. Construimos la consulta
     return SeguimientoMensual.objects.select_related(
         'id_seguimiento__id_venta',
-        'id_seguimiento__id_venta__id_producto'
+        'id_seguimiento__id_venta__id_producto',
+        # ---> ESCUDO ANTI N+1 <---
+        'id_seguimiento__id_venta__id_origen_venta__id_modalidad'
     ).filter(
         mes_numero=1,
         pago_cliente_realizado=True,
@@ -106,15 +106,18 @@ def resumir_pozo_comisiones(ventas_pagadas_qs: QuerySet) -> dict:
 # ==========================================
 # MOTOR DE LECTURA FINANCIERA (REGLAS Y PLANILLAS)
 # ==========================================
-def obtener_regla_comision_vigente(escenario: str, fecha_referencia: date) -> Optional[ReglaComision]:
+def obtener_regla_comision_vigente(escenario: str, codigo_modalidad: str, fecha_referencia: date) -> Optional[
+    ReglaComision]:
     """
-    Busca la regla de comisión administrativa que estaba vigente en la fecha dada.
-    Retorna None si RRHH olvidó configurarla.
+    Busca la regla de comisión administrativa que estaba vigente en la fecha dada,
+    filtrando estrictamente por el escenario (ELITE/ESTANDAR) Y la modalidad (CALL/CAMPO).
     """
+    # Convertimos la fecha al día 1 del mes para asegurar comparación justa
     fecha_base = fecha_referencia.replace(day=1)
 
     return ReglaComision.objects.filter(
         escenario=escenario,
+        id_modalidad__codigo__iexact=codigo_modalidad,  # <--- EL NUEVO PUENTE MULTICANAL
         periodo_inicio__lte=fecha_base,
         activo=True
     ).order_by('-periodo_inicio').first()
