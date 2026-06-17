@@ -326,7 +326,7 @@ def liquidar_planilla_mensual(mes: int, anio: int, usuario_rrhh: Usuario) -> dic
         'perfil_laboral'
     ).prefetch_related(
         Prefetch(
-            'permisosacceso_set',
+            'permisos',
             # FIX: Se retiró el .filter(activo=True).
             # Solo traemos toda la cadena de relaciones sin filtrar por estado.
             queryset=PermisoAcceso.objects.select_related(
