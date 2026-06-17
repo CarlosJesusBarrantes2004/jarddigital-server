@@ -26,17 +26,24 @@ class AsistenciaUpsertSerializer(serializers.Serializer):
 
 
 class ReglaComisionSerializer(serializers.ModelSerializer):
+    # Regalo para el frontend: Le mandamos el texto "CALL" o "CAMPO" explícito
+    # para que lo pueda pintar en su tabla sin tener que hacer otra petición GET.
+    codigo_modalidad = serializers.CharField(source='id_modalidad.codigo', read_only=True)
+
     class Meta:
         model = ReglaComision
-        # FIX 1: Listado explícito de campos en lugar de '__all__'
         fields = [
             'id', 'periodo_inicio', 'escenario',
+
+            # ---> LOS NUEVOS CAMPOS DE LA FASE 4 <---
+            'id_modalidad', 'codigo_modalidad',
+
             'min_ventas_pagadas_medio', 'min_ventas_pagadas_optimo',
             'alto_valor_nivel_1', 'alto_valor_nivel_2', 'alto_valor_nivel_3',
             'sueldo_base_elite', 'activo', 'creado_en'
         ]
-        # Protegemos el ID y la fecha de creación contra inyecciones
-        read_only_fields = ['id', 'creado_en']
+        # Protegemos el ID, la fecha y el campo extra que creamos para lectura
+        read_only_fields = ['id', 'creado_en', 'codigo_modalidad']
 
 
 class HistoricoPlanillaSerializer(serializers.ModelSerializer):
@@ -45,10 +52,9 @@ class HistoricoPlanillaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = HistoricoPlanilla
-        # FIX 2 y 5: Listado explícito en fields y read_only_fields
         fields = [
             'id', 'id_usuario', 'nombre_asesor', 'mes_fiscal', 'anio_fiscal',
-            'ventas_instaladas_mes_actual', 'ventas_pagadas_mes_anterior',
+            'modalidad_aplicada', 'ventas_instaladas_mes_actual', 'ventas_pagadas_mes_anterior',
             'ventas_alto_valor_pagadas', 'cantidad_faltas', 'sueldo_base_aplicado',
             'porcentaje_pozo_aplicado', 'multiplicador_alto_valor',
             'pozo_comisiones_bruto', 'comision_neta_ganada', 'descuento_inasistencias',
@@ -58,7 +64,7 @@ class HistoricoPlanillaSerializer(serializers.ModelSerializer):
         # Bloqueo total: Todo el modelo es estrictamente de lectura
         read_only_fields = [
             'id', 'id_usuario', 'mes_fiscal', 'anio_fiscal',
-            'ventas_instaladas_mes_actual', 'ventas_pagadas_mes_anterior',
+            'modalidad_aplicada', 'ventas_instaladas_mes_actual', 'ventas_pagadas_mes_anterior',
             'ventas_alto_valor_pagadas', 'cantidad_faltas', 'sueldo_base_aplicado',
             'porcentaje_pozo_aplicado', 'multiplicador_alto_valor',
             'pozo_comisiones_bruto', 'comision_neta_ganada', 'descuento_inasistencias',
