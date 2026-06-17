@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Prefetch
 import calendar
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
@@ -9,7 +10,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, timedelta
 
 # Importamos los modelos y selectores necesarios
-from apps.users.models import Usuario
+from apps.users.models import Usuario, PermisoAcceso
 from apps.finances.models import HistoricoPlanilla, Asistencia
 from apps.finances.selectors import (
     contar_ventas_instaladas_mes_actual,
@@ -190,6 +191,26 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
     fecha_evaluacion = date(anio, mes, 1)
 
     # ============================================================
+    # MODALIDAD ESTRICTA OPTIMIZADA (0 Consultas N+1)
+    # ============================================================
+    permiso_activo = None
+
+    if hasattr(usuario, 'permisos_activos_prefetched'):
+        if usuario.permisos_activos_prefetched:
+            permiso_activo = usuario.permisos_activos_prefetched[0]
+    else:
+        permiso_activo = usuario.permisosacceso_set.filter(activo=True).select_related(
+            'id_modalidad_sede__id_modalidad'
+        ).first()
+
+    if not permiso_activo or not getattr(permiso_activo, 'id_modalidad_sede', None):
+        raise ValueError(
+            f"El asesor {usuario.nombre_completo} no tiene una sede/modalidad activa asignada en el sistema."
+        )
+
+    codigo_modalidad = permiso_activo.id_modalidad_sede.id_modalidad.codigo
+
+    # ============================================================
     # ESCENARIO MES ACTUAL → Define el SUELDO BASE
     # ============================================================
     instaladas_mes_actual = contar_ventas_instaladas_mes_actual(usuario.id, mes, anio)
@@ -210,16 +231,17 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
     # ============================================================
     # REGLAS: Cada escenario busca su propia ReglaComision
     # ============================================================
-    regla_sueldo = obtener_regla_comision_vigente(escenario_sueldo, fecha_evaluacion)
+    # FIX: Se inyectó 'codigo_modalidad' en ambos llamados
+    regla_sueldo = obtener_regla_comision_vigente(escenario_sueldo, codigo_modalidad, fecha_evaluacion)
     if not regla_sueldo:
         raise ValueError(
-            f"No existe Regla de Comisión para escenario {escenario_sueldo} en {mes}/{anio}."
+            f"No existe Regla de Comisión para escenario {escenario_sueldo} ({codigo_modalidad}) en {mes}/{anio}."
         )
 
-    regla_comisiones = obtener_regla_comision_vigente(escenario_comisiones, fecha_evaluacion)
+    regla_comisiones = obtener_regla_comision_vigente(escenario_comisiones, codigo_modalidad, fecha_evaluacion)
     if not regla_comisiones:
         raise ValueError(
-            f"No existe Regla de Comisión para escenario {escenario_comisiones} en {mes}/{anio}."
+            f"No existe Regla de Comisión para escenario {escenario_comisiones} ({codigo_modalidad}) en {mes}/{anio}."
         )
 
     # ============================================================
@@ -278,7 +300,7 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
     return {
         "id_usuario": usuario.id,
         "nombre_completo": usuario.nombre_completo,
-        # Dos escenarios separados para trazabilidad
+        "modalidad_aplicada": codigo_modalidad, # Nuevo campo agregado
         "escenario_sueldo": escenario_sueldo,
         "escenario_comisiones": escenario_comisiones,
         "ventas_instaladas": instaladas_mes_actual,
@@ -294,12 +316,23 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
         "sueldo_neto_final": sueldo_neto_final
     }
 
-
 # ==========================================
 # 2. MOTOR DE LIQUIDACIÓN MASIVA (RRHH)
 # ==========================================
 def liquidar_planilla_mensual(mes: int, anio: int, usuario_rrhh: Usuario) -> dict:
-    asesores = Usuario.objects.select_related('perfil_laboral').filter(
+    asesores = Usuario.objects.select_related(
+        'perfil_laboral'
+    ).prefetch_related(
+        Prefetch(
+            'permisosacceso_set',
+            # Filtramos solo los activos y traemos la cadena completa de relaciones
+            queryset=PermisoAcceso.objects.filter(activo=True).select_related(
+                'id_modalidad_sede__id_modalidad'
+            ),
+            # Guardamos el resultado en un atributo virtual llamado 'permisos_activos_prefetched'
+            to_attr='permisos_activos_prefetched'
+        )
+    ).filter(
         id_rol__codigo='ASESOR',
         activo=True
     )
