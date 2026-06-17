@@ -199,7 +199,9 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
         if usuario.permisos_activos_prefetched:
             permiso_activo = usuario.permisos_activos_prefetched[0]
     else:
-        permiso_activo = usuario.permisosacceso_set.filter(activo=True).select_related(
+        permiso_activo = PermisoAcceso.objects.filter(
+            id_usuario=usuario
+        ).select_related(
             'id_modalidad_sede__id_modalidad'
         ).first()
 
@@ -325,8 +327,9 @@ def liquidar_planilla_mensual(mes: int, anio: int, usuario_rrhh: Usuario) -> dic
     ).prefetch_related(
         Prefetch(
             'permisosacceso_set',
-            # Filtramos solo los activos y traemos la cadena completa de relaciones
-            queryset=PermisoAcceso.objects.filter(activo=True).select_related(
+            # FIX: Se retiró el .filter(activo=True).
+            # Solo traemos toda la cadena de relaciones sin filtrar por estado.
+            queryset=PermisoAcceso.objects.select_related(
                 'id_modalidad_sede__id_modalidad'
             ),
             # Guardamos el resultado en un atributo virtual llamado 'permisos_activos_prefetched'
