@@ -184,21 +184,29 @@ def upsert_asistencia_masiva(datos_validados: list[dict], id_sucursal: int, usua
     return len(datos_validados)
 
 
-
 def generar_excel_planillas_asesores(queryset_filtrado) -> HttpResponse:
     """
     Genera un reporte Excel con las planillas liquidadas de los asesores.
-    Recibe el queryset ya filtrado por la vista (mes, año, sucursal, etc.).
+    Utiliza el Snapshot Pattern (modalidad_aplicada y sede_aplicada) para máxima velocidad y fiabilidad histórica.
     """
-    # 1. Optimización vital: Aseguramos traer los datos del usuario en la misma consulta
+    # Consulta limpia y veloz (Traemos solo al usuario para el DNI y Nombre)
     planillas = queryset_filtrado.select_related('id_usuario')
 
-    # 2. Preparación del Excel
+    # Nombre dinámico del archivo
+    primer_registro = planillas.first()
+    if primer_registro:
+        mes_reporte = str(primer_registro.mes_fiscal).zfill(2)
+        anio_reporte = str(primer_registro.anio_fiscal)
+        nombre_archivo = f"Planilla_Comisiones_{mes_reporte}_{anio_reporte}.xlsx"
+    else:
+        nombre_archivo = "Planilla_Comisiones_Vacia.xlsx"
+
+    # Preparación del Excel
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Planilla Comisiones"
 
-    # Estilos (Manteniendo tu diseño corporativo)
+    # Estilos
     fill_cabecera = PatternFill(start_color='FFFF0000', end_color='FFFF0000', fill_type='solid')
     font_cabecera = Font(color='FFFFFFFF', italic=True, bold=True)
     borde_delgado = Border(
@@ -206,11 +214,10 @@ def generar_excel_planillas_asesores(queryset_filtrado) -> HttpResponse:
         top=Side(style='thin'), bottom=Side(style='thin')
     )
     alineacion_centrada = Alignment(horizontal='center', vertical='center')
-
-    # Formato de moneda para que el Excel lo reconozca como dinero
     formato_moneda = '#,##0.00'
 
-    cabeceras = ["ITEM", "MODALIDAD", "DNI", "ASESOR", "SUELDO (CON DCTO)", "COMISIÓN", "TOTAL"]
+    # Cabeceras actualizadas
+    cabeceras = ["ITEM", "SEDE - MODALIDAD", "DNI", "ASESOR", "SUELDO (CON DCTO)", "COMISIÓN", "TOTAL"]
     ws.append(cabeceras)
 
     # Aplicar estilos a la cabecera
@@ -220,26 +227,28 @@ def generar_excel_planillas_asesores(queryset_filtrado) -> HttpResponse:
         cell.alignment = alineacion_centrada
         cell.border = borde_delgado
 
-    # 3. Llenado de Datos
+    # Llenado de Datos
     for idx, planilla in enumerate(planillas, start=1):
         usuario = planilla.id_usuario
 
-        # Manejo seguro de nulos para Usuario y DNI
+        # ---> LA SOLUCIÓN ELEGANTE: Snapshot Pattern <---
+        modalidad = planilla.modalidad_aplicada or ""
+        sede = planilla.sede_aplicada or "SIN SEDE"
+        modalidad_sede = f"{sede} - {modalidad}" if modalidad else sede
+
         dni = usuario.dni if (usuario and hasattr(usuario, 'dni') and usuario.dni) else "SIN DNI"
         nombre = usuario.nombre_completo if usuario else "Desconocido"
-        modalidad = planilla.modalidad_aplicada or "CALL"
 
-        # Cálculos financieros (Convertidos a float para que Excel pueda sumarlos si el cliente quiere)
-        sueldo_base = float(planilla.sueldo_base_aplicado or 0)
-        descuento = float(planilla.descuento_inasistencias or 0)
+        sueldo_base = planilla.sueldo_base_aplicado or Decimal('0.00')
+        descuento = planilla.descuento_inasistencias or Decimal('0.00')
         sueldo_descontado = sueldo_base - descuento
 
-        comision = float(planilla.comision_neta_ganada or 0)
-        total = float(planilla.sueldo_neto_final or 0)
+        comision = planilla.comision_neta_ganada or Decimal('0.00')
+        total = planilla.sueldo_neto_final or Decimal('0.00')
 
         fila = [
             idx,
-            modalidad,
+            modalidad_sede,
             dni,
             nombre,
             sueldo_descontado,
@@ -248,16 +257,15 @@ def generar_excel_planillas_asesores(queryset_filtrado) -> HttpResponse:
         ]
         ws.append(fila)
 
-        # Aplicar estilos a la fila recién agregada
+        # Aplicar estilos a la fila
         fila_actual = ws[ws.max_row]
         for idx_celda, celda in enumerate(fila_actual):
             celda.alignment = alineacion_centrada
             celda.border = borde_delgado
-            # A las columnas de dinero (índices 4, 5 y 6) les ponemos formato numérico
             if idx_celda in [4, 5, 6]:
                 celda.number_format = formato_moneda
 
-    # 4. Auto-Ajuste de Columnas
+    # Auto-Ajuste de Columnas
     max_col_letra = get_column_letter(len(cabeceras))
     ws.auto_filter.ref = f"A1:{max_col_letra}{ws.max_row}"
 
@@ -266,17 +274,15 @@ def generar_excel_planillas_asesores(queryset_filtrado) -> HttpResponse:
         col_letter = col[0].column_letter
         for cell in col:
             try:
-                # Usamos un formateo simple de string para medir el ancho
                 if cell.value and len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
             except:
                 pass
-        # Un poco de margen extra
         ws.column_dimensions[col_letter].width = (max_length + 4) if (max_length + 4) >= 12 else 12
 
-    # 5. Retornamos la respuesta HTTP
+    # Retornamos la respuesta HTTP
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename="Reporte_Planilla_Comisiones.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
     wb.save(response)
 
     return response
@@ -310,6 +316,10 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
         )
 
     codigo_modalidad = permiso_activo.id_modalidad_sede.id_modalidad.codigo
+
+    nombre_sede = permiso_activo.id_modalidad_sede.nombre \
+        if hasattr(permiso_activo.id_modalidad_sede, 'nombre') \
+        else str(permiso_activo.id_modalidad_sede)
 
     # ============================================================
     # ESCENARIO MES ACTUAL → Define el SUELDO BASE
@@ -402,6 +412,7 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
         "id_usuario": usuario.id,
         "nombre_completo": usuario.nombre_completo,
         "modalidad_aplicada": codigo_modalidad, # Nuevo campo agregado
+        "sede_aplicada": nombre_sede,
         "escenario_sueldo": escenario_sueldo,
         "escenario_comisiones": escenario_comisiones,
         "ventas_instaladas": instaladas_mes_actual,
@@ -458,6 +469,7 @@ def liquidar_planilla_mensual(mes: int, anio: int, usuario_rrhh: Usuario) -> dic
                         anio_fiscal=anio,
                         defaults={
                             'modalidad_aplicada': proyeccion['modalidad_aplicada'],
+                            'sede_aplicada': proyeccion['sede_aplicada'],
                             'ventas_instaladas_mes_actual': proyeccion['ventas_instaladas'],
                             'ventas_pagadas_mes_anterior': proyeccion['ventas_pagadas'],
                             'ventas_alto_valor_pagadas': proyeccion['ventas_alto_valor'],
