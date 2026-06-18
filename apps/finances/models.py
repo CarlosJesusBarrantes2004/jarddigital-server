@@ -94,6 +94,13 @@ class HistoricoPlanilla(models.Model):
         help_text="Código de la modalidad evaluada en este mes (Ej: CALL, CAMPO)"
     )
 
+    sede_aplicada = models.CharField(
+        max_length=150,
+        null=True,
+        blank=True,
+        help_text="Nombre de la sede al momento de la liquidación (Snapshot)"
+    )
+
     ventas_instaladas_mes_actual = models.PositiveSmallIntegerField(help_text="Define si aplica Élite o Estándar")
     ventas_pagadas_mes_anterior = models.PositiveSmallIntegerField(help_text="Define el % del pozo")
     ventas_alto_valor_pagadas = models.PositiveSmallIntegerField(default=0, help_text="Define multiplicador 90/100/110")
