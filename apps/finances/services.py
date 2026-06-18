@@ -307,7 +307,8 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
         permiso_activo = PermisoAcceso.objects.filter(
             id_usuario=usuario
         ).select_related(
-            'id_modalidad_sede__id_modalidad'
+            'id_modalidad_sede__id_modalidad',
+            'id_modalidad_sede__id_sucursal'
         ).first()
 
     if not permiso_activo or not getattr(permiso_activo, 'id_modalidad_sede', None):
@@ -315,11 +316,10 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
             f"El asesor {usuario.nombre_completo} no tiene una sede/modalidad activa asignada en el sistema."
         )
 
+    # Extracción corregida y segura de modalidad y sucursal (Sede)
     codigo_modalidad = permiso_activo.id_modalidad_sede.id_modalidad.codigo
-
-    nombre_sede = permiso_activo.id_modalidad_sede.nombre \
-        if hasattr(permiso_activo.id_modalidad_sede, 'nombre') \
-        else str(permiso_activo.id_modalidad_sede)
+    sucursal = permiso_activo.id_modalidad_sede.id_sucursal
+    nombre_sede = sucursal.nombre if sucursal and hasattr(sucursal, 'nombre') else "SIN SEDE"
 
     # ============================================================
     # ESCENARIO MES ACTUAL → Define el SUELDO BASE
@@ -440,7 +440,8 @@ def liquidar_planilla_mensual(mes: int, anio: int, usuario_rrhh: Usuario) -> dic
             # FIX: Se retiró el .filter(activo=True).
             # Solo traemos toda la cadena de relaciones sin filtrar por estado.
             queryset=PermisoAcceso.objects.select_related(
-                'id_modalidad_sede__id_modalidad'
+                'id_modalidad_sede__id_modalidad',
+                'id_modalidad_sede__id_sucursal'
             ),
             # Guardamos el resultado en un atributo virtual llamado 'permisos_activos_prefetched'
             to_attr='permisos_activos_prefetched'
