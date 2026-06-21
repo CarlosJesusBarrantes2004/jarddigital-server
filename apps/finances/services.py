@@ -12,6 +12,7 @@ from datetime import date, timedelta
 # Importamos los modelos y selectores necesarios
 from apps.users.models import Usuario, PermisoAcceso
 from apps.finances.models import HistoricoPlanilla, Asistencia
+from apps.users.selectors import extraer_contexto_modalidad_sede
 from apps.finances.selectors import (
     contar_ventas_instaladas_mes_actual,
     obtener_ventas_pagadas_mes_anterior,
@@ -296,30 +297,17 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
     fecha_evaluacion = date(anio, mes, 1)
 
     # ============================================================
-    # MODALIDAD ESTRICTA OPTIMIZADA (0 Consultas N+1)
+    # MODALIDAD Y SEDE EN MEMORIA VIA HELPER (0 Consultas N+1)
     # ============================================================
-    permiso_activo = None
+    contexto_sede = extraer_contexto_modalidad_sede(usuario)
 
-    if hasattr(usuario, 'permisos_activos_prefetched'):
-        if usuario.permisos_activos_prefetched:
-            permiso_activo = usuario.permisos_activos_prefetched[0]
-    else:
-        permiso_activo = PermisoAcceso.objects.filter(
-            id_usuario=usuario
-        ).select_related(
-            'id_modalidad_sede__id_modalidad',
-            'id_modalidad_sede__id_sucursal'
-        ).first()
+    codigo_modalidad = contexto_sede["modalidad_codigo"]
+    nombre_sede = contexto_sede["sede_nombre"]
 
-    if not permiso_activo or not getattr(permiso_activo, 'id_modalidad_sede', None):
+    if not codigo_modalidad:
         raise ValueError(
-            f"El asesor {usuario.nombre_completo} no tiene una sede/modalidad activa asignada en el sistema."
+            f"El asesor {usuario.nombre_completo} no tiene una modalidad/sede activa asignada en el sistema."
         )
-
-    # Extracción corregida y segura de modalidad y sucursal (Sede)
-    codigo_modalidad = permiso_activo.id_modalidad_sede.id_modalidad.codigo
-    sucursal = permiso_activo.id_modalidad_sede.id_sucursal
-    nombre_sede = sucursal.nombre if sucursal and hasattr(sucursal, 'nombre') else "SIN SEDE"
 
     # ============================================================
     # ESCENARIO MES ACTUAL → Define el SUELDO BASE
@@ -411,7 +399,7 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
     return {
         "id_usuario": usuario.id,
         "nombre_completo": usuario.nombre_completo,
-        "modalidad_aplicada": codigo_modalidad, # Nuevo campo agregado
+        "modalidad_aplicada": codigo_modalidad,
         "sede_aplicada": nombre_sede,
         "escenario_sueldo": escenario_sueldo,
         "escenario_comisiones": escenario_comisiones,

@@ -1,6 +1,8 @@
 from rest_framework.exceptions import ValidationError
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
+
+from apps.users.selectors import extraer_contexto_modalidad_sede
 from .models import Seguimiento, SeguimientoMensual
 
 import openpyxl
@@ -41,7 +43,7 @@ def generar_excel_seguimiento_pendientes(usuario_peticion, queryset_filtrado=Non
                            top=Side(style='thin'), bottom=Side(style='thin'))
     alineacion_centrada = Alignment(horizontal='center', vertical='center')
 
-    cabeceras = ["ID", "DNI/RUC", "CLIENTE", "PLAN", "CODIGO", "ASESOR", "FECHA", "ESTADO"]
+    cabeceras = ["ID", "DNI/RUC", "CLIENTE", "PLAN", "CODIGO", "ASESOR", "SEDE - MODALIDAD", "FECHA", "ESTADO"]
     ws.append(cabeceras)
 
     # Aplicar estilos a la cabecera
@@ -69,6 +71,10 @@ def generar_excel_seguimiento_pendientes(usuario_peticion, queryset_filtrado=Non
         plan = venta.id_producto.nombre_paquete if (venta and venta.id_producto) else ""
         asesor = venta.id_asesor.nombre_completo if (venta and venta.id_asesor) else ""
 
+        # ---> EXTRACCIÓN MEDIANTE HELPER CENTRALIZADO <---
+        # Al pasarle venta.id_asesor, lee directamente del prefetch sin consultas extras
+        modalidad_sede = extraer_contexto_modalidad_sede(getattr(venta, 'id_asesor', None))["texto_completo"]
+
         fila = [
             idx,
             dni_ruc,
@@ -76,6 +82,7 @@ def generar_excel_seguimiento_pendientes(usuario_peticion, queryset_filtrado=Non
             plan,
             seguimiento.codigo_pago or "",
             asesor,
+            modalidad_sede,
             fecha_formateada,
             seguimiento.estado or ""
         ]
