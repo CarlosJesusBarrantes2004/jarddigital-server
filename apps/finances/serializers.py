@@ -56,7 +56,7 @@ class HistoricoPlanillaSerializer(serializers.ModelSerializer):
         model = HistoricoPlanilla
         fields = [
             'id', 'id_usuario', 'nombre_asesor', 'dni_asesor', 'mes_fiscal', 'anio_fiscal',
-            'modalidad_aplicada', 'ventas_instaladas_mes_actual', 'ventas_pagadas_mes_anterior',
+            'modalidad_aplicada', 'sede_aplicada', 'ventas_instaladas_mes_actual', 'ventas_pagadas_mes_anterior',
             'ventas_alto_valor_pagadas', 'cantidad_faltas', 'sueldo_base_aplicado',
             'porcentaje_pozo_aplicado', 'multiplicador_alto_valor',
             'pozo_comisiones_bruto', 'comision_neta_ganada', 'descuento_inasistencias',
@@ -66,7 +66,7 @@ class HistoricoPlanillaSerializer(serializers.ModelSerializer):
         # Bloqueo total: Todo el modelo es estrictamente de lectura
         read_only_fields = [
             'id', 'id_usuario', 'mes_fiscal', 'anio_fiscal',
-            'modalidad_aplicada', 'ventas_instaladas_mes_actual', 'ventas_pagadas_mes_anterior',
+            'modalidad_aplicada', 'sede_aplicada', 'ventas_instaladas_mes_actual', 'ventas_pagadas_mes_anterior',
             'ventas_alto_valor_pagadas', 'cantidad_faltas', 'sueldo_base_aplicado',
             'porcentaje_pozo_aplicado', 'multiplicador_alto_valor',
             'pozo_comisiones_bruto', 'comision_neta_ganada', 'descuento_inasistencias',
