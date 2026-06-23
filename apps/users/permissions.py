@@ -101,3 +101,23 @@ class PuedeGestionarSeguimiento(permissions.BasePermission):
         # 2. Si la petición es de Escritura (PATCH / PUT)
         roles_escritura = ['DUENO', 'SEGUIMIENTO']
         return codigo_rol in roles_escritura
+
+
+class PuedeVerPlanillas(permissions.BasePermission):
+    """
+    Permiso de seguridad para que solo el Dueño, RRHH y el Coordinador
+    puedan acceder a la mesa de control de planillas y reportes de liquidación.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+
+        # Extraemos el rol de forma segura
+        rol = getattr(user, 'id_rol', None)
+
+        # Validación en cascada: Asegura que exista el rol y que el código no sea None
+        codigo_rol = rol.codigo.upper() if (rol and getattr(rol, 'codigo', None)) else ''
+
+        return codigo_rol in ['DUENO', 'RRHH', 'COORDINADOR']

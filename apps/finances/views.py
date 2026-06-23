@@ -24,7 +24,7 @@ from .services import liquidar_planilla_mensual, proyectar_comisiones_asesor, ge
 from .selectors import obtener_planillas_mensuales_optimizadas
 
 # Importamos tus permisos
-from apps.users.permissions import EsDueño, PuedeTomarAsistencia
+from apps.users.permissions import EsDueño,PuedeTomarAsistencia, PuedeVerPlanillas
 
 # Configuración del Logger para producción
 logger = logging.getLogger(__name__)
@@ -121,10 +121,11 @@ class ReglaComisionViewSet(viewsets.ModelViewSet):
 
 class LiquidacionRRHHViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ENDPOINT 2: Mesa de Control para Recursos Humanos.
+    ENDPOINT 2: Mesa de Control para Recursos Humanos y Dirección.
+    Permite auditar, ejecutar y exportar las liquidaciones mensuales.
     """
     serializer_class = HistoricoPlanillaSerializer
-    permission_classes = [IsAuthenticated, PuedeTomarAsistencia]
+    permission_classes = [IsAuthenticated, PuedeVerPlanillas]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['mes_fiscal', 'anio_fiscal', 'id_usuario']
 
