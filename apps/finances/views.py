@@ -16,7 +16,8 @@ from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 
 # Importamos modelos y serializers
-from .models import ReglaComision
+from apps.users.models import Usuario
+from .models import ReglaComision, HistoricoPlanilla
 from .serializers import ReglaComisionSerializer, HistoricoPlanillaSerializer
 
 # Importamos los servicios y selectores
@@ -172,7 +173,7 @@ class LiquidacionRRHHViewSet(viewsets.ReadOnlyModelViewSet):
             cache.delete(lock_key)
 
     # ============================================================
-    # ---> LA NUEVA PIEZA DE EXPORTACIÓN (EXCEL) <---
+    # ---> PIEZA DE EXPORTACIÓN (EXCEL) <---
     # ============================================================
     @action(detail=False, methods=['GET'], url_path='exportar-excel')
     def exportar_excel(self, request):
@@ -198,6 +199,86 @@ class LiquidacionRRHHViewSet(viewsets.ReadOnlyModelViewSet):
             logger.error(f"Error al exportar planilla Excel: {str(e)}", exc_info=True)
             return Response(
                 {"error": "No se pudo generar el archivo Excel en este momento."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    # ============================================================
+    # --->  PREVISUALIZACIÓN EN VIVO (ADMIN) <---
+    # ============================================================
+    @action(detail=False, methods=['GET'], url_path='proyeccion-asesor')
+    def previsualizar_asesor(self, request):
+        """
+        ENDPOINT: GET /api/finances/planillas/proyeccion-asesor/?id_usuario=5&mes=6&anio=2026
+        OJO: Este endpoint siempre recalcula en vivo. Si se consulta un mes ya cerrado,
+        la data podría diferir ligeramente del histórico inmutable (HistoricoPlanilla).
+        """
+        id_usuario = request.query_params.get('id_usuario')
+        if not id_usuario:
+            return Response(
+                {"error": "Debe proporcionar el parámetro 'id_usuario' del asesor."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        hoy = date.today()
+        data_entrada = {
+            'mes': request.query_params.get('mes', hoy.month),
+            'anio': request.query_params.get('anio', hoy.year)
+        }
+
+        serializer = PeriodoInputSerializer(data=data_entrada)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        mes = serializer.validated_data['mes']
+        anio = serializer.validated_data['anio']
+
+        try:
+
+
+            # FIX 1: select_related('perfil_laboral') para evitar la query extra en el escenario ESTANDAR
+            asesor = Usuario.objects.select_related('perfil_laboral').get(
+                id=id_usuario,
+                id_rol__codigo='ASESOR',
+                activo=True
+            )
+
+            # Calculamos la proyección en vivo
+            proyeccion = proyectar_comisiones_asesor(asesor, mes, anio)
+
+            # FIX 2: Validación rápida de estado histórico
+            # Si el mes/año consultado es anterior al actual, revisamos si ya existe una liquidación.
+            fecha_consulta = date(anio, mes, 1)
+            fecha_actual = date(hoy.year, hoy.month, 1)
+
+            alerta_historico = None
+            if fecha_consulta < fecha_actual:
+                ya_liquidado = HistoricoPlanilla.objects.filter(
+                    id_usuario=asesor, mes_fiscal=mes, anio_fiscal=anio
+                ).exists()
+
+                if ya_liquidado:
+                    alerta_historico = "ATENCIÓN: Este mes ya cuenta con una liquidación oficial. Los datos mostrados aquí son un recálculo en vivo y podrían diferir de la planilla guardada."
+
+            # Inyectamos metadatos para ayudar al Frontend
+            respuesta_final = {
+                "tipo_dato": "PROYECCION_VIVO",
+                "alerta": alerta_historico,
+                "data": proyeccion
+            }
+
+            return Response(respuesta_final, status=status.HTTP_200_OK)
+
+        except Usuario.DoesNotExist:
+            return Response(
+                {"error": "No se encontró un asesor activo con el ID proporcionado."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Error en previsualización de admin para asesor {id_usuario}: {str(e)}", exc_info=True)
+            return Response(
+                {"error": "Ocurrió un error interno al calcular la proyección del asesor."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
