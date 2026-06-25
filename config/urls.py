@@ -40,4 +40,5 @@ urlpatterns = [
     path("api/ubigeo/", include("apps.ubigeo.urls")),
     path("api/tracking/", include("apps.tracking.urls")),
     path('api/finances/', include('apps.finances.urls')),
+    path('api/analytics/', include('apps.analytics.urls')),
 ]
