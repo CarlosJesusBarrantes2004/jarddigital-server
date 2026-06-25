@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "apps.finances",
     "apps.core",
     "apps.ubigeo",
+    "apps.analytics",
 ]
 
 MIDDLEWARE = [
