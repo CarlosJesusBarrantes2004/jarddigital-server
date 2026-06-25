@@ -1,7 +1,9 @@
 from django.utils import timezone
-from django.db.models import QuerySet, Prefetch, Exists, OuterRef, Q
+from django.db.models import QuerySet, Count, Exists, OuterRef, Q, F
+from django.db.models.functions import ExtractMonth
 from apps.users.models import PermisoAcceso
 from .models import Venta
+from datetime import date
 
 
 def obtener_grabadores_disponibles(queryset_base: QuerySet, id_venta_actual: int = None) -> QuerySet:
@@ -105,3 +107,116 @@ def obtener_ventas_permitidas(usuario_peticion) -> QuerySet:
     ).annotate(
         _ya_reingresada=Exists(reingresos_activos)
     )
+
+
+
+def obtener_metricas_asesor(*, usuario, anio: int) -> dict:
+    """
+    Extrae las métricas personales de un asesor.
+    Incluye desglose mensual, recuento anual, Top de Productos y
+    una proyección motivacional (Month-to-Date) comparando con el mes anterior.
+    """
+    queryset_base = Venta.objects.filter(
+        id_asesor=usuario,
+        fecha_real_inst__year=anio,
+        activo=True
+    )
+
+    # Filtros seguros Anti Fan-Out
+    filtro_atendidas = Q(id_estado_sot__codigo__iexact='ATENDIDO')
+    filtro_pendientes = Q(id_estado_sot__codigo__iexact='PENDIENTE')
+    filtro_pagadas = Q(
+        id_estado_sot__codigo__iexact='ATENDIDO',
+        seguimiento__seguimientomensual_set__mes_numero=1,
+        seguimiento__seguimientomensual_set__pago_cliente_realizado=True
+    )
+
+    # 1. Agrupación mensual (Lo que pidió el negocio)
+    ventas_por_mes = list(
+        queryset_base.annotate(
+            mes=ExtractMonth('fecha_real_inst')
+        ).values('mes').annotate(
+            total_atendidas=Count('id', filter=filtro_atendidas, distinct=True),
+            total_pendientes=Count('id', filter=filtro_pendientes, distinct=True),
+            total_pagadas=Count('id', filter=filtro_pagadas, distinct=True)
+        ).order_by('mes')
+    )
+
+    # 2. Recuento global del año
+    totales_anio = queryset_base.aggregate(
+        gran_total_atendidas=Count('id', filter=filtro_atendidas, distinct=True),
+        gran_total_pendientes=Count('id', filter=filtro_pendientes, distinct=True),
+        gran_total_pagadas=Count('id', filter=filtro_pagadas, distinct=True)
+    )
+    for key in totales_anio:
+        if totales_anio[key] is None: totales_anio[key] = 0
+
+    # ============================================================
+    # 🌟 EL TOQUE EXTRA 1: TOP 5 PRODUCTOS MÁS VENDIDOS
+    # ============================================================
+    top_productos = list(
+        queryset_base.filter(id_estado_sot__codigo__iexact='ATENDIDO')
+        .values(nombre=F('id_producto__nombre_paquete'))
+        .annotate(total=Count('id', distinct=True))
+        .order_by('-total')[:5]
+    )
+
+    # ============================================================
+    # 🌟 EL TOQUE EXTRA 2: PROYECCIÓN MTD (Month-To-Date)
+    # ============================================================
+    hoy = date.today()
+    proyeccion = None
+
+    # Solo calculamos proyección si están consultando el año en curso
+    if anio == hoy.year:
+        mes_actual = hoy.month
+        dia_actual = hoy.day
+
+        # Matemáticas para obtener el mes anterior (manejando enero -> diciembre)
+        if mes_actual == 1:
+            mes_anterior = 12
+            anio_anterior = hoy.year - 1
+        else:
+            mes_anterior = mes_actual - 1
+            anio_anterior = hoy.year
+
+        # Ventas del mes actual hasta el día de hoy
+        ventas_actuales = Venta.objects.filter(
+            id_asesor=usuario, activo=True, id_estado_sot__codigo__iexact='ATENDIDO',
+            fecha_real_inst__year=hoy.year, fecha_real_inst__month=mes_actual,
+            fecha_real_inst__day__lte=dia_actual
+        ).count()
+
+        # Ventas del mes pasado hasta el mismo día de corte
+        ventas_pasadas = Venta.objects.filter(
+            id_asesor=usuario, activo=True, id_estado_sot__codigo__iexact='ATENDIDO',
+            fecha_real_inst__year=anio_anterior, fecha_real_inst__month=mes_anterior,
+            fecha_real_inst__day__lte=dia_actual
+        ).count()
+
+        tendencia = "IGUAL"
+        porcentaje = 0
+        if ventas_pasadas > 0:
+            crecimiento = ((ventas_actuales - ventas_pasadas) / ventas_pasadas) * 100
+            tendencia = "MEJOR" if crecimiento > 0 else ("PEOR" if crecimiento < 0 else "IGUAL")
+            porcentaje = abs(round(crecimiento))
+        elif ventas_actuales > 0:
+            tendencia = "MEJOR"
+            porcentaje = 100
+
+        proyeccion = {
+            "ventas_mes_actual_hasta_hoy": ventas_actuales,
+            "ventas_mes_anterior_hasta_hoy": ventas_pasadas,
+            "tendencia": tendencia,
+            "porcentaje": porcentaje,
+            "mensaje": f"Llevas {ventas_actuales} ventas. El mes pasado a esta fecha llevabas {ventas_pasadas}."
+        }
+
+    return {
+        "anio_evaluado": anio,
+        "asesor": usuario.nombre_completo,
+        "totales_anio": totales_anio,
+        "desglose_mensual": ventas_por_mes,
+        "top_productos": top_productos,
+        "proyeccion_motivacional": proyeccion
+    }

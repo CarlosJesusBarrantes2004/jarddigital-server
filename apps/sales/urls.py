@@ -8,7 +8,8 @@ from .views import (
     EstadoAudioViewSet,
     ProductoViewSet,
     GrabadorAudioViewSet,
-    VentaViewSet
+    VentaViewSet,
+    MisMetricasAsesorView
 )
 
 # Instanciamos el enrutador automático
@@ -25,6 +26,7 @@ router.register(r'grabadores', GrabadorAudioViewSet, basename='grabador-audio')
 router.register(r'ventas', VentaViewSet, basename='venta') # <--- ¡EL ENCHUFE FINAL!
 
 urlpatterns = [
+    path('mis-metricas/', MisMetricasAsesorView.as_view(), name='ventas-mis-metricas'),
     # Le decimos a Django que incluya todas las URLs generadas por el router
     path('', include(router.urls)),
 ]

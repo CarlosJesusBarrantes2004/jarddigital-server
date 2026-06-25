@@ -1,6 +1,10 @@
+import logging
+from datetime import date
+
 from rest_framework import viewsets, filters
 from rest_framework.permissions import IsAuthenticated
-from apps.sales.models import Venta
+from rest_framework.views import APIView
+
 from apps.sales.serializers import VentaSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import VentaFilter
@@ -11,14 +15,13 @@ from django.views.decorators.cache import cache_page
 # Importamos tu papelera de reciclaje y tus aduanas
 from apps.core.mixins import SoftDeleteModelViewSet
 from apps.users.permissions import SoloLecturaOCrearSiEsJefe
-from apps.users.models import PermisoAcceso
 
 from rest_framework import status
 from rest_framework.response import Response
 
 from .selectors import obtener_ventas_permitidas
 from .services import generar_excel_ventas, eliminar_venta_definitiva
-from .selectors import obtener_grabadores_disponibles
+from .selectors import obtener_grabadores_disponibles, obtener_metricas_asesor
 from .models import EstadoSOT, SubEstadoSOT, EstadoAudio, Producto, GrabadorAudio
 from .serializers import (
     EstadoSOTSerializer,
@@ -27,6 +30,8 @@ from .serializers import (
     ProductoSerializer,
     GrabadorAudioSerializer
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ==========================================
@@ -160,3 +165,47 @@ class VentaViewSet(SoftDeleteModelViewSet):
             {"mensaje": "La venta y todos sus registros asociados fueron eliminados físicamente de la base de datos."},
             status=status.HTTP_204_NO_CONTENT
         )
+
+
+class MisMetricasAsesorView(APIView):
+    """
+    Dashboard exclusivo para el Asesor.
+    Muestra sus ventas agrupadas por mes, totales del año,
+    confirmación de pagos del Mes 1, top productos y proyección MTD.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        usuario = request.user
+
+        # Bloqueo de seguridad: Evitamos que el Dueño o RRHH usen esta ruta por error
+        if getattr(usuario.id_rol, 'codigo', '').upper() != 'ASESOR':
+            return Response(
+                {"error": "Este panel de métricas es exclusivo para Asesores."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Validación simple del parámetro año (por defecto el año actual en curso dinámico)
+        anio_actual = str(date.today().year)
+        anio_str = request.query_params.get('anio', anio_actual)
+
+        if not anio_str.isdigit():
+            return Response(
+                {"error": "El parámetro 'anio' debe ser un número válido."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        anio = int(anio_str)
+
+        try:
+            # Toda la lógica compleja (gamificación, top ventas) vive en el selector.
+            # La vista solo orquesta el paso de datos.
+            data = obtener_metricas_asesor(usuario=usuario, anio=anio)
+            return Response(data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Error cargando métricas para el asesor {usuario.id}: {str(e)}", exc_info=True)
+            return Response(
+                {"error": "No se pudieron generar las métricas de rendimiento."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
