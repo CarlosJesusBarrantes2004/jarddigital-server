@@ -148,8 +148,8 @@ def obtener_metricas_asesor(*, usuario, anio: int) -> dict:
     # es suficiente para evitar inflar el conteo aquí.
     filtro_pagadas = Q(
         id_estado_sot__codigo__iexact='ATENDIDO',
-        seguimiento__seguimientomensual_set__mes_numero=1,
-        seguimiento__seguimientomensual_set__pago_cliente_realizado=True
+        seguimiento__meses_evaluados__mes_numero=1,
+        seguimiento__meses_evaluados__pago_cliente_realizado=True
     )
 
     # ============================================================
