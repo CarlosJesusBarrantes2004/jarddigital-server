@@ -35,6 +35,11 @@ class EstadoAudioSerializer(serializers.ModelSerializer):
         fields = ["id", "codigo", "nombre", "activo"]
 
 
+class AnioInputSerializer(serializers.Serializer):
+    """Valida que el año de entrada sea lógico y coherente."""
+    anio = serializers.IntegerField(min_value=2020, max_value=2100)
+
+
 # ==========================================
 # 2. OPERATIVOS Y PRODUCTOS (Fase 2)
 # ==========================================

@@ -24,6 +24,7 @@ from .services import generar_excel_ventas, eliminar_venta_definitiva
 from .selectors import obtener_grabadores_disponibles, obtener_metricas_asesor
 from .models import EstadoSOT, SubEstadoSOT, EstadoAudio, Producto, GrabadorAudio
 from .serializers import (
+    AnioInputSerializer,
     EstadoSOTSerializer,
     SubEstadoSOTSerializer,
     EstadoAudioSerializer,
@@ -185,21 +186,20 @@ class MisMetricasAsesorView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Validación simple del parámetro año (por defecto el año actual en curso dinámico)
-        anio_actual = str(date.today().year)
-        anio_str = request.query_params.get('anio', anio_actual)
+        # Validación estandarizada con DRF (Patrón consistente)
+        hoy = date.today()
+        serializer = AnioInputSerializer(data={
+            'anio': request.query_params.get('anio', hoy.year)
+        })
 
-        if not anio_str.isdigit():
-            return Response(
-                {"error": "El parámetro 'anio' debe ser un número válido."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        anio = int(anio_str)
+        # DRF ya se encargó de convertir el string a int y validar los rangos
+        anio = serializer.validated_data['anio']
 
         try:
             # Toda la lógica compleja (gamificación, top ventas) vive en el selector.
-            # La vista solo orquesta el paso de datos.
             data = obtener_metricas_asesor(usuario=usuario, anio=anio)
             return Response(data, status=status.HTTP_200_OK)
 
