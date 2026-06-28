@@ -29,18 +29,42 @@ def _anotaciones_meses(campo_fecha: str) -> dict:
 # ==========================================
 # SELECTOR BASE COMPARTIDO
 # ==========================================
+def _campo_fecha_para_estado(estado_sot: str = None) -> str:
+    """
+    PENDIENTE y RECHAZADO no tienen fecha_real_inst (es NULL).
+    Para PENDIENTE usamos fecha_venta.
+    Para RECHAZADO usamos fecha_rechazo.
+    Para ATENDIDO usamos fecha_real_inst.
+    """
+    if not estado_sot:
+        return 'fecha_real_inst'
+        
+    estado = estado_sot.upper()
+    if estado == 'PENDIENTE':
+        return 'fecha_venta'
+    elif estado == 'RECHAZADO':
+        return 'fecha_rechazo'
+    
+    return 'fecha_real_inst'
+
+
 def query_base_ventas_filtradas(
     *,
     anio: int,
     estado_sot: str = None,
     modalidad: str = None,
-    campo_fecha: str = 'fecha_real_inst'
+    campo_fecha: str = None,
+    id_sede: int = None,
 ):
     """
     Selector base con los filtros globales aplicados.
     NO TOCA la relación 'permisos' aquí — eso se resuelve en un paso aparte
     para evitar fan-out (duplicación de filas por JOIN uno-a-muchos).
     """
+    # Si no se especifica campo_fecha, lo inferimos del estado_sot
+    if campo_fecha is None:
+        campo_fecha = _campo_fecha_para_estado(estado_sot)
+
     filtros = {f"{campo_fecha}__year": anio, "activo": True}
     queryset = Venta.objects.filter(**filtros)
 
@@ -55,6 +79,11 @@ def query_base_ventas_filtradas(
         # candidatas antes de filtrar, aunque el resultado final sea el mismo set de ventas.
         queryset = queryset.filter(
             id_asesor__permisos__id_modalidad_sede__id_modalidad__codigo__iexact=modalidad
+        ).distinct()
+
+    if id_sede:
+        queryset = queryset.filter(
+            id_asesor__permisos__id_modalidad_sede__id_sucursal_id=id_sede
         ).distinct()
 
     return queryset
@@ -104,7 +133,8 @@ def obtener_matriz_pivote_sql(*, anio: int, estado_sot: str) -> dict:
     """
     queryset = query_base_ventas_filtradas(anio=anio, estado_sot=estado_sot)
 
-    anotaciones = _anotaciones_meses('fecha_real_inst')
+    campo_fecha = _campo_fecha_para_estado(estado_sot)
+    anotaciones = _anotaciones_meses(campo_fecha)
 
     # 1. Filas de la matriz con su total de fila (horizontal) — SIN tocar permisos aquí
     filas_matriz = list(
@@ -149,6 +179,7 @@ def query_barras_rendimiento(*, anio: int, estado_sot: str = None, mes: int = No
     Resuelve los Gráficos 2 y 4. Misma estrategia: agregamos por asesor
     primero, resolvemos sede/modalidad después.
     """
+    campo_fecha = _campo_fecha_para_estado(estado_sot)
     queryset = query_base_ventas_filtradas(anio=anio, estado_sot=estado_sot)
 
     if id_asesor:
@@ -156,7 +187,7 @@ def query_barras_rendimiento(*, anio: int, estado_sot: str = None, mes: int = No
 
     if mes:
         # Gráfico 2: Un mes específico, agrupado por asesor
-        queryset = queryset.filter(fecha_real_inst__month=mes)
+        queryset = queryset.filter(**{f"{campo_fecha}__month": mes})
         filas = list(
             queryset.values(
                 asesor_id=F('id_asesor__id'),
@@ -167,7 +198,7 @@ def query_barras_rendimiento(*, anio: int, estado_sot: str = None, mes: int = No
         # Gráfico 4: Evolución mensual, agrupado por asesor y mes
         filas = list(
             queryset.annotate(
-                num_mes=ExtractMonth('fecha_real_inst')
+                num_mes=ExtractMonth(campo_fecha)
             ).values(
                 'num_mes',
                 asesor_id=F('id_asesor__id'),
@@ -189,10 +220,11 @@ def query_barras_rendimiento(*, anio: int, estado_sot: str = None, mes: int = No
 # ==========================================
 # GRÁFICO 5 — TENDENCIA DIARIA (Líneas comparativas)
 # ==========================================
-def obtener_tendencia_diaria(*, anio: int, mes: int, modalidad: str = None) -> dict:
+def obtener_tendencia_diaria(*, anio: int, mes: int, modalidad: str = None, id_sede: int = None) -> dict:
     """
     Resuelve el Gráfico 5: serie día-a-día de un mes específico, con total final.
     Se llama dos veces desde el frontend (una por cada mes a comparar).
+    Siempre cuenta ventas ATENDIDAS (con fecha_real_inst).
     """
     queryset = Venta.objects.filter(
         id_estado_sot__codigo__iexact='ATENDIDO',
@@ -205,6 +237,11 @@ def obtener_tendencia_diaria(*, anio: int, mes: int, modalidad: str = None) -> d
         # filter() puro, no values() con el campo incluido → sin riesgo de fan-out
         queryset = queryset.filter(
             id_asesor__permisos__id_modalidad_sede__id_modalidad__codigo__iexact=modalidad
+        ).distinct()
+
+    if id_sede:
+        queryset = queryset.filter(
+            id_asesor__permisos__id_modalidad_sede__id_sucursal_id=id_sede
         ).distinct()
 
     serie = list(
@@ -260,7 +297,9 @@ def obtener_nivel_jerarquico(
     nivel: int,
     anio: int = None,
     padre_id=None,
-    solo_alto_valor: bool = False
+    solo_alto_valor: bool = False,
+    modalidad: str = None,
+    id_sede: int = None,
 ) -> dict:
     """
     Resuelve el Gráfico 6: devuelve SOLO el nivel solicitado del árbol,
@@ -270,6 +309,8 @@ def obtener_nivel_jerarquico(
     - nivel: 0, 1, 2 (índice dentro de DIMENSIONES_JERARQUICAS[dimension])
     - padre_id: el ID/valor del nivel anterior seleccionado (None si es el nivel raíz)
     - solo_alto_valor: filtro transversal, no forma parte de la jerarquía
+    - modalidad: 'CALL' o 'CAMPO' (opcional, filtro de sede/modalidad)
+    - id_sede: ID de la sucursal (opcional, filtro de sede)
     """
     if dimension not in DIMENSIONES_JERARQUICAS:
         raise ValueError(f"Dimensión '{dimension}' no reconocida. Use 'GEOGRAFIA' o 'PRODUCTO'.")
@@ -292,6 +333,16 @@ def obtener_nivel_jerarquico(
     if solo_alto_valor:
         # Filtro transversal: aplica sin importar la dimensión activa
         queryset = queryset.filter(id_producto__es_alto_valor=True)
+
+    if modalidad:
+        queryset = queryset.filter(
+            id_asesor__permisos__id_modalidad_sede__id_modalidad__codigo__iexact=modalidad
+        ).distinct()
+
+    if id_sede:
+        queryset = queryset.filter(
+            id_asesor__permisos__id_modalidad_sede__id_sucursal_id=id_sede
+        ).distinct()
 
     # Si hay un padre seleccionado, filtramos por el campo_id del nivel anterior
     if padre_id is not None and nivel > 0:

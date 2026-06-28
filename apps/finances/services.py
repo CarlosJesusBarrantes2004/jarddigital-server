@@ -403,7 +403,8 @@ def proyectar_comisiones_asesor(usuario: Usuario, mes: int, anio: int) -> dict:
         "sede_aplicada": nombre_sede,
         "escenario_sueldo": escenario_sueldo,
         "escenario_comisiones": escenario_comisiones,
-        "ventas_instaladas": instaladas_mes_actual,
+        "ventas_instaladas_mes_actual": instaladas_mes_actual,
+        "ventas_instaladas_mes_anterior": instaladas_mes_anterior,
         "ventas_pagadas": ventas_pagadas,
         "ventas_alto_valor": ventas_av,
         "sueldo_base_aplicado": sueldo_base,
@@ -459,7 +460,7 @@ def liquidar_planilla_mensual(mes: int, anio: int, usuario_rrhh: Usuario) -> dic
                         defaults={
                             'modalidad_aplicada': proyeccion['modalidad_aplicada'],
                             'sede_aplicada': proyeccion['sede_aplicada'],
-                            'ventas_instaladas_mes_actual': proyeccion['ventas_instaladas'],
+                            'ventas_instaladas_mes_actual': proyeccion['ventas_instaladas_mes_anterior'],
                             'ventas_pagadas_mes_anterior': proyeccion['ventas_pagadas'],
                             'ventas_alto_valor_pagadas': proyeccion['ventas_alto_valor'],
                             'cantidad_faltas': proyeccion['dias_falta'],

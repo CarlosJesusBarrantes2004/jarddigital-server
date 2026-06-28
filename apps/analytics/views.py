@@ -84,7 +84,8 @@ class TendenciaDiariaView(APIView):
             data = obtener_tendencia_diaria(
                 anio=datos['anio'],
                 mes=datos['mes'],
-                modalidad=datos.get('modalidad')
+                modalidad=datos.get('modalidad'),
+                id_sede=datos.get('id_sede')
             )
             return Response(data, status=status.HTTP_200_OK)
         except Exception as e:
@@ -112,7 +113,9 @@ class DistribucionJerarquicaView(APIView):
                 nivel=datos['nivel'],
                 anio=datos.get('anio'),
                 padre_id=datos.get('padre_id'),
-                solo_alto_valor=datos.get('solo_alto_valor', False)
+                solo_alto_valor=datos.get('solo_alto_valor', False),
+                modalidad=datos.get('modalidad'),
+                id_sede=datos.get('id_sede')
             )
             return Response(data, status=status.HTTP_200_OK)
         except ValueError as e:

@@ -45,6 +45,7 @@ class TendenciaDiariaInputSerializer(serializers.Serializer):
     anio = serializers.IntegerField(min_value=2020, max_value=2100)
     mes = serializers.IntegerField(min_value=1, max_value=12)
     modalidad = serializers.ChoiceField(choices=MODALIDAD_CHOICES, required=False, allow_null=True)
+    id_sede = serializers.IntegerField(required=False, allow_null=True)
 
 
 # ==========================================
@@ -57,6 +58,8 @@ class DistribucionJerarquicaInputSerializer(serializers.Serializer):
     anio = serializers.IntegerField(min_value=2020, max_value=2100, required=False, allow_null=True)
     padre_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     solo_alto_valor = serializers.BooleanField(required=False, default=False)
+    modalidad = serializers.ChoiceField(choices=MODALIDAD_CHOICES, required=False, allow_null=True)
+    id_sede = serializers.IntegerField(required=False, allow_null=True)
 
     def validate(self, data):
         """
